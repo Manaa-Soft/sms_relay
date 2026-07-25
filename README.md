@@ -1,177 +1,185 @@
 # SMS Relay
 
-SMS Relay Gateway for Frappe/ERPNext — multi-device SMS routing with queue management, template rendering, and automated document notifications.
+Frappe/ERPNext app for sending SMS via a private Android SMS Gateway server. Multi-device routing, async queue, delivery tracking, and automated document notifications.
+
+## How It Works
+
+```
+ERPNext (Invoice/Payment)
+        |
+  sms_relay hooks
+        |
+  SMS Queue (priority + TTL)
+        |
+  Device Selector (health, quota, priority)
+        |
+  Android Phone (via SMS Gateway server)
+        |
+  Delivery Webhook --> Frappe (status updated)
+```
 
 ## Features
 
-- **Multi-device routing** — Priority-based device selection with health checks, daily quotas, and automatic failover.
-- **Async queue** — All outgoing SMS is queued, dispatched by a per-minute scheduler, and retried on failure.
-- **Document hooks** — Automatically send SMS on Sales Invoice, Payment Entry, and Payment Request submission.
-- **Overdue reminders** — Configurable interval-based payment reminders (e.g., 7, 14, 30, 60, 90 days).
-- **Jinja templates** — Render messages with full document context (customer name, amounts, due dates, etc.).
-- **Webhook callbacks** — Receive delivery/failure confirmations from gateway devices via HMAC-signed webhooks.
-- **Rate limiting** — Per-device throttle and daily quotas to stay within carrier limits.
-- **Opt-out support** — Respect SMS opt-out preferences.
-- **Dashboard** — Device health indicators, today's stats, and send-SMS button on invoices.
-- **REST API** — Whitelisted methods for immediate send, bulk send, stats, retries, and template preview.
+- **Multi-device routing** — Priority-based device selection with health checks, daily quotas, and automatic failover
+- **Async queue** — All outgoing SMS is queued, dispatched per-minute, retried on failure
+- **Document hooks** — Auto-send SMS on Sales Invoice, Payment Entry, Payment Request submit
+- **Overdue reminders** — Configurable interval-based payment reminders (e.g. 7, 14, 30, 60, 90 days)
+- **Jinja templates** — Render messages with full document context
+- **Webhook delivery receipts** — Receive delivery/failure confirmations with HMAC verification
+- **Rate limiting** — Per-device throttle and daily quotas
+- **Opt-out support** — Check opt-out list before sending
+- **Dashboard** — Device health, today's stats, send-SMS button on invoices
+- **REST API** — Immediate send, bulk send, stats, retries, template preview
 
 ## Requirements
 
 - Frappe Framework v14+ / v15+
-- ERPNext v14+ (for Sales Invoice, Payment Entry, Payment Request doctypes)
-- An SMS gateway device (e.g., Android phone running an SMS gateway app such as [SMS Gateway](https://github.com/bipin2017/sms-gateway) or similar)
+- ERPNext v14+ (for Sales Invoice, Payment Entry, Payment Request)
+- [Android SMS Gateway](https://github.com/bipin2017/sms-gateway) server running in Docker
+- At least one Android phone connected to the gateway
 
 ## Installation
 
 ```bash
 cd /path/to/frappe-bench
-bench get-app /path/to/sms_relay
-bench --site site-name install-app sms_relay
-bench --site site-name migrate
-bench build --app sms_relay
-bench restart
-```
 
-Or install from a Git repository:
-
-```bash
-bench get-app https://github.com/manaa-soft/sms_relay.git
-bench --site site-name install-app sms_relay
+bench get-app https://github.com/Manaa-Soft/sms_relay.git
+bench --site your-site install-app sms_relay
+bench migrate
 bench build --app sms_relay
 bench restart
 ```
 
 ## Configuration
 
-### 1. SMS Gateway Settings
-
-Go to **SMS Gateway Settings** in Frappe:
+### 1. SMS Gateway Settings (Setup > SMS Gateway Settings)
 
 | Field | Description |
 |---|---|
-| Enabled | Master toggle for SMS sending |
-| Gateway URL | Base URL of the SMS gateway device (e.g., `http://192.168.1.100:8080`) |
-| API Key | API key for gateway authentication |
-| API Secret | API secret (used for webhook HMAC verification) |
-| Webhook Secret | Secret for validating incoming webhook signatures |
-| Default Sender | Default sender ID / name |
-| Send Invoice SMS | Enable automatic SMS on Sales Invoice submit |
-| Send Payment SMS | Enable automatic SMS on Payment Entry submit |
-| Send Payment Request SMS | Enable automatic SMS on Payment Request submit |
-| Send Overdue Reminders | Enable daily overdue invoice reminders |
-| Reminder Intervals | Comma-separated days (e.g., `7,14,30,60,90`) |
-| Rate Limit | Max SMS per device per minute (default: 30) |
-| Max Retry Count | Max retry attempts for failed SMS (default: 3) |
+| Enabled | Master on/off toggle |
+| Server URL | Gateway server URL (e.g. `http://192.168.1.15:3000`) |
+| API Path | Endpoint path (default: `/api/3rdparty/v1/message`) |
+| Username | Gateway username |
+| Password | Gateway password |
+| Private Token | Alternative auth (Bearer token) |
+| Timeout | HTTP timeout in seconds (default: 15) |
+| Send Invoice SMS | Auto-send on Sales Invoice submit |
+| Send Payment SMS | Auto-send on Payment Entry submit |
+| Send Overdue Reminders | Daily overdue balance notifications |
+| Reminder Time | When to send reminders (default: 09:00) |
+| Reminder Intervals | Days after due date (e.g. `7,14,30,60,90`) |
+| Max Retry Count | Retries for failed SMS (default: 3) |
+| Rate Limit | Per-device per-minute cap (default: 30) |
+| Batch Size | Max SMS per queue cycle (default: 10) |
+| Log Retention | Days to keep SMS logs (default: 90) |
+| Webhook Enabled | Receive delivery receipts |
+| Webhook HMAC Secret | Secret for webhook signature verification |
+| Check Opt-Out List | Skip opted-out numbers |
 
-### 2. SMS Devices
-
-Create **SMS Device** records under SMS Device:
+### 2. SMS Devices (SMS Relay > SMS Device)
 
 | Field | Description |
 |---|---|
-| Device Name | Human-readable name |
-| Gateway URL | Device-specific URL (overrides global) |
-| SIM Slot | SIM slot number (1 or 2) |
+| Device Name | Human-readable label |
+| Device ID | Gateway device ID (auto-detected) |
+| Connection Mode | Local / Cloud / Private |
+| Server URL | Device-specific URL override |
+| Username / Password | Device-specific credentials |
+| SIM Number | SIM slot (1 or 2) |
 | Priority | Lower = higher priority (tried first) |
-| Daily Quota | Max SMS per day (0 = unlimited) |
-| Status | Online / Offline (updated by heartbeat) |
+| Active | Enable/disable device |
+| Daily Quota | Max SMS per day |
+| Default Country Code | Prefix for local numbers (e.g. `+967`) |
 
-### 3. SMS Templates
+### 3. SMS Templates (SMS Relay > SMS Template)
 
-Create **SMS Template** records. Templates use Jinja2 syntax. Available variables depend on context:
+Templates use Jinja2 syntax. Create one per event type.
 
-**Invoice template variables:**
-`customer_name`, `invoice_name`, `posting_date`, `due_date`, `total`, `outstanding`, `company`
+**Available variables by event:**
 
-**Payment template variables:**
-`party_name`, `payment_name`, `amount`, `posting_date`, `payment_method`, `company`
-
-**Payment request template variables:**
-`party_name`, `request_name`, `amount`, `payment_url`, `company`
-
-**Overdue template variables:**
-`customer_name`, `invoice_names`, `outstanding_total`, `days_overdue`, `earliest_due_date`, `invoice_count`
+| Event | Variables |
+|---|---|
+| Invoice Created | `doc`, `customer_name`, `grand_total`, `due_date`, `outstanding_amount`, `name`, `currency` |
+| Payment Received | `doc`, `party_name`, `paid_amount`, `posting_date`, `name`, `reference_name` |
+| Overdue Reminder | `doc`, `customer_name`, `name`, `outstanding_amount`, `due_date`, `days_overdue` |
+| Payment Request | `doc`, `party_name`, `amount`, `payment_url`, `name` |
 
 ### 4. Webhook Configuration
 
-Configure your SMS gateway device to send delivery reports to:
+Point your SMS Gateway server to send delivery reports to:
 
 ```
-POST /api/method/sms_relay.webhook_receiver.incoming_webhook
+POST http://your-frappe-site/api/method/sms_relay.webhook_receiver.incoming_webhook
 Content-Type: application/json
 
 {
     "event": "sms:delivered",
-    "message_id": "<id>",
+    "message_id": "<gateway_message_id>",
     "device_name": "<device>"
 }
 ```
 
-Supported events: `sms:delivered`, `sms:failed`, `sms:sent`, `system:ping`.
-
-If `Webhook Secret` is configured, the device must include an HMAC-SHA256 `signature` field computed over the JSON payload.
+Supported events: `sms:delivered`, `sms:failed`, `sms:sent`, `system:ping`
 
 ## API Reference
 
-All methods are whitelisted and called via Frappe RPC:
+All methods called via Frappe RPC (`frappe.call`).
 
-### `sms_relay.api.send_sms_now`
+### Send Immediately
 
-Send an SMS immediately (bypasses queue).
-
-```
-recipient: str    # Phone number
-message: str      # SMS body
-template: str     # Optional template name
-device: str       # Optional device name (auto-select if omitted)
-sim: int          # Optional SIM slot
-```
-
-### `sms_relay.api.send_bulk_sms`
-
-Enqueue SMS for multiple recipients.
-
-```
-recipients_csv: str   # Comma/newline-separated phone numbers
-message: str          # SMS body
-template: str         # Optional template name
+```javascript
+frappe.call({
+    method: "sms_relay.api.send_sms_now",
+    args: {
+        recipient: "+967712345678",
+        message: "Your invoice #SINV-001 is ready.",
+        template: "Invoice Created",  // optional
+        device: "Phone A",           // optional, auto-select if omitted
+        sim: 1                       // optional
+    }
+});
 ```
 
-### `sms_relay.api.get_device_health`
+### Bulk Send
 
-Returns health status of all enabled devices (online/offline, quota, heartbeat).
-
-### `sms_relay.api.preview_template`
-
-Render a template with real document data for preview.
-
-```
-template_name: str   # SMS Template name
-doc_type: str        # Optional DocType
-doc_name: str        # Optional document name
+```javascript
+frappe.call({
+    method: "sms_relay.api.send_bulk_sms",
+    args: {
+        recipients_csv: "+967712345678,+967798765432",
+        message: "Payment reminder: you have an outstanding balance."
+    }
+});
 ```
 
-### `sms_relay.api.retry_sms`
+### Other Endpoints
 
-Re-queue a failed SMS for retry.
+| Method | Description |
+|---|---|
+| `sms_relay.api.get_device_health` | Device online/offline status, quota, heartbeat |
+| `sms_relay.api.preview_template` | Render template with real doc data |
+| `sms_relay.api.retry_sms` | Re-queue a failed SMS |
+| `sms_relay.api.get_sms_stats` | Today's sent/failed/pending/delivered counts |
 
-```
-queue_name: str   # SMS Queue document name
-```
+## Scheduled Jobs
 
-### `sms_relay.api.get_sms_stats`
-
-Returns today's sent/failed/pending/delivered counts.
-
-## Scheduler Jobs
-
-| Schedule | Function | Description |
+| Schedule | Job | Description |
 |---|---|---|
-| Every minute | `process_sms_queue` | Dispatch queued SMS |
+| Every minute | `process_sms_queue` | Dispatch queued SMS to devices |
 | Daily | `send_balance_reminders` | Overdue invoice notifications |
 | Daily | `retry_failed_sms` | Re-enqueue failed SMS |
-| Daily | `cleanup_old_logs` | Delete logs older than 90 days |
+| Daily | `cleanup_old_logs` | Delete logs older than retention period |
 | Daily | `reset_daily_quotas` | Reset device daily counters |
+
+## DocTypes
+
+| DocType | Description |
+|---|---|
+| SMS Gateway Settings | Singleton — global config |
+| SMS Device | Registered Android phone |
+| SMS Template | Jinja2 message templates |
+| SMS Queue | Pending/outgoing messages |
+| SMS Log | Complete SMS history with delivery status |
 
 ## License
 
