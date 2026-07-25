@@ -1,0 +1,101 @@
+{
+ "name": "SMS Template",
+ "module": "SMS Relay",
+ "doctype": "DocType",
+ "document_type": "Document",
+ "engine": "InnoDB",
+ "issingle": 0,
+ "istable": 0,
+ "editable_grid": 0,
+ "track_changes": 1,
+ "autoname": "field:template_name",
+ "title_field": "template_name",
+ "search_fields": "template_name,event",
+ "sort_field": "event",
+ "sort_order": "ASC",
+ "fields": [
+  {
+   "fieldname": "template_name",
+   "fieldtype": "Data",
+   "label": "Template Name",
+   "reqd": 1,
+   "unique": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "event",
+   "fieldtype": "Select",
+   "label": "Event",
+   "options": "Invoice Created\nPayment Received\nOverdue Reminder\nPayment Request\nDelivery Note\nCustom",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "label": "Enabled",
+   "default": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "message_template",
+   "fieldtype": "Code",
+   "label": "Message Template",
+   "reqd": 1,
+   "options": "Python",
+   "description": "Jinja template. Available: doc, customer_name, grand_total, due_date, outstanding_amount, name, etc.",
+   "indent": 1
+  },
+  {
+   "fieldname": "section_preview",
+   "fieldtype": "Section Break",
+   "label": "Preview"
+  },
+  {
+   "fieldname": "preview_phone",
+   "fieldtype": "Data",
+   "label": "Test Phone Number"
+  },
+  {
+   "fieldname": "section_variables",
+   "fieldtype": "Section Break",
+   "label": "Available Variables",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "variables_description",
+   "fieldtype": "Small Text",
+   "label": "Variables",
+   "read_only": 1,
+   "description": "For Invoice: doc, customer_name, grand_total, due_date, outstanding_amount, name, currency\nFor Payment: doc, party_name, paid_amount, posting_date, name, reference_name\nFor Overdue: doc, customer_name, name, outstanding_amount, due_date, days_overdue"
+  }
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 0,
+   "print": 0,
+   "report": 0,
+   "export": 0,
+   "import": 0,
+   "share": 1
+  },
+  {
+   "role": "All",
+   "read": 1,
+   "write": 0,
+   "create": 0,
+   "delete": 0,
+   "email": 0,
+   "print": 0,
+   "report": 0,
+   "export": 0,
+   "import": 0,
+   "share": 0
+  }
+ ]
+}

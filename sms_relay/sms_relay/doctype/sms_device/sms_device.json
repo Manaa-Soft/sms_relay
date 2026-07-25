@@ -1,0 +1,160 @@
+{
+ "name": "SMS Device",
+ "module": "SMS Relay",
+ "doctype": "DocType",
+ "document_type": "Document",
+ "engine": "InnoDB",
+ "issingle": 0,
+ "istable": 0,
+ "editable_grid": 0,
+ "track_changes": 1,
+ "autoname": "field:device_name",
+ "title_field": "device_name",
+ "search_fields": "device_name,device_id",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "fields": [
+  {
+   "fieldname": "device_name",
+   "fieldtype": "Data",
+   "label": "Device Name",
+   "reqd": 1,
+   "unique": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "device_id",
+   "fieldtype": "Data",
+   "label": "Device ID",
+   "description": "Gateway device ID (auto-detected)",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "mode",
+   "fieldtype": "Select",
+   "label": "Connection Mode",
+   "options": "Local\nCloud\nPrivate",
+   "default": "Private"
+  },
+  {
+   "fieldname": "server_url",
+   "fieldtype": "Data",
+   "label": "Server URL",
+   "description": "Override per-device (leave empty to use global)"
+  },
+  {
+   "fieldname": "column_break_basic",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "username",
+   "fieldtype": "Data",
+   "label": "Username"
+  },
+  {
+   "fieldname": "password",
+   "fieldtype": "Password",
+   "label": "Password"
+  },
+  {
+   "fieldname": "sim_number",
+   "fieldtype": "Int",
+   "label": "SIM Number",
+   "default": "1",
+   "options": "1\n2"
+  },
+  {
+   "fieldname": "priority",
+   "fieldtype": "Int",
+   "label": "Priority",
+   "default": 0,
+   "description": "Lower = higher priority",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "is_active",
+   "fieldtype": "Check",
+   "label": "Active",
+   "default": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "section_status",
+   "fieldtype": "Section Break",
+   "label": "Status"
+  },
+  {
+   "fieldname": "last_heartbeat",
+   "fieldtype": "Datetime",
+   "label": "Last Heartbeat",
+   "read_only": 1
+  },
+  {
+   "fieldname": "is_online",
+   "fieldtype": "Check",
+   "label": "Online",
+   "read_only": 1
+  },
+  {
+   "fieldname": "daily_quota",
+   "fieldtype": "Int",
+   "label": "Daily Quota",
+   "default": 200
+  },
+  {
+   "fieldname": "sent_today",
+   "fieldtype": "Int",
+   "label": "Sent Today",
+   "default": 0,
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_status",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "section_info",
+   "fieldtype": "Section Break",
+   "label": "Info"
+  },
+  {
+   "fieldname": "country_code",
+   "fieldtype": "Data",
+   "label": "Default Country Code",
+   "default": "+967"
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Notes"
+  }
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 0,
+   "print": 0,
+   "report": 1,
+   "export": 1,
+   "import": 1,
+   "share": 1
+  },
+  {
+   "role": "All",
+   "read": 1,
+   "write": 0,
+   "create": 0,
+   "delete": 0,
+   "email": 0,
+   "print": 0,
+   "report": 0,
+   "export": 0,
+   "import": 0,
+   "share": 0
+  }
+ ]
+}

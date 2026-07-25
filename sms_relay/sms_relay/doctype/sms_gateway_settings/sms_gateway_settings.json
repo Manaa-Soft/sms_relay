@@ -1,0 +1,181 @@
+{
+ "name": "SMS Gateway Settings",
+ "module": "SMS Relay",
+ "doctype": "DocType",
+ "document_type": "Document",
+ "engine": "InnoDB",
+ "issingle": 1,
+ "istable": 0,
+ "editable_grid": 0,
+ "track_changes": 0,
+ "autoname": "format:SMS Gateway Settings",
+ "title_field": "",
+ "search_fields": "",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "fields": [
+  {
+   "fieldname": "general_section",
+   "fieldtype": "Section Break",
+   "label": "General"
+  },
+  {
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "label": "Enabled",
+   "default": 1
+  },
+  {
+   "fieldname": "gateway_url",
+   "fieldtype": "Data",
+   "label": "Server URL",
+   "reqd": 1,
+   "description": "e.g. http://192.168.1.15:3000"
+  },
+  {
+   "fieldname": "api_path",
+   "fieldtype": "Data",
+   "label": "API Path",
+   "default": "/api/3rdparty/v1/message"
+  },
+  {
+   "fieldname": "column_break_general1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "username",
+   "fieldtype": "Data",
+   "label": "Username",
+   "reqd": 1
+  },
+  {
+   "fieldname": "password",
+   "fieldtype": "Password",
+   "label": "Password",
+   "reqd": 1
+  },
+  {
+   "fieldname": "private_token",
+   "fieldtype": "Password",
+   "label": "Private Token",
+   "description": "For device registration (alternative to Basic Auth)"
+  },
+  {
+   "fieldname": "timeout",
+   "fieldtype": "Int",
+   "label": "Timeout (seconds)",
+   "default": 15
+  },
+  {
+   "fieldname": "section_notification",
+   "fieldtype": "Section Break",
+   "label": "Notification Settings"
+  },
+  {
+   "fieldname": "send_invoice_sms",
+   "fieldtype": "Check",
+   "label": "Send Invoice SMS",
+   "default": 1
+  },
+  {
+   "fieldname": "send_payment_sms",
+   "fieldtype": "Check",
+   "label": "Send Payment SMS",
+   "default": 1
+  },
+  {
+   "fieldname": "send_overdue_reminders",
+   "fieldtype": "Check",
+   "label": "Send Overdue Balance Reminders",
+   "default": 1
+  },
+  {
+   "fieldname": "column_break_notif1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "reminder_time",
+   "fieldtype": "Time",
+   "label": "Reminder Time",
+   "default": "09:00:00"
+  },
+  {
+   "fieldname": "reminder_intervals",
+   "fieldtype": "Data",
+   "label": "Reminder Intervals (days)",
+   "default": "7,14,30,60,90",
+   "description": "Comma-separated days after due date"
+  },
+  {
+   "fieldname": "section_queue",
+   "fieldtype": "Section Break",
+   "label": "Queue & Rate Limiting"
+  },
+  {
+   "fieldname": "max_retry_count",
+   "fieldtype": "Int",
+   "label": "Max Retry Count",
+   "default": 3
+  },
+  {
+   "fieldname": "rate_limit_per_minute",
+   "fieldtype": "Int",
+   "label": "Rate Limit (per device per minute)",
+   "default": 30
+  },
+  {
+   "fieldname": "batch_size",
+   "fieldtype": "Int",
+   "label": "Batch Size",
+   "default": 10,
+   "description": "Max SMS to process per queue cycle"
+  },
+  {
+   "fieldname": "log_retention_days",
+   "fieldtype": "Int",
+   "label": "Log Retention (days)",
+   "default": 90
+  },
+  {
+   "fieldname": "section_webhook",
+   "fieldtype": "Section Break",
+   "label": "Webhook Settings"
+  },
+  {
+   "fieldname": "webhook_enabled",
+   "fieldtype": "Check",
+   "label": "Enable Incoming Webhooks"
+  },
+  {
+   "fieldname": "webhook_secret",
+   "fieldtype": "Password",
+   "label": "Webhook HMAC Secret"
+  },
+  {
+   "fieldname": "section_opt_out",
+   "fieldtype": "Section Break",
+   "label": "Compliance"
+  },
+  {
+   "fieldname": "check_opt_out",
+   "fieldtype": "Check",
+   "label": "Check Opt-Out List Before Sending",
+   "default": 1
+  }
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 0,
+   "print": 0,
+   "report": 0,
+   "export": 0,
+   "import": 0,
+   "share": 0
+  }
+ ]
+}

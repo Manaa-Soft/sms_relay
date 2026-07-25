@@ -1,0 +1,162 @@
+{
+ "name": "SMS Queue",
+ "module": "SMS Relay",
+ "doctype": "DocType",
+ "document_type": "Document",
+ "engine": "InnoDB",
+ "issingle": 0,
+ "istable": 0,
+ "editable_grid": 0,
+ "track_changes": 0,
+ "autoname": "format:SMSG-{####}",
+ "title_field": "recipient",
+ "search_fields": "recipient,recipient_name,gateway_message_id",
+ "sort_field": "priority",
+ "sort_order": "ASC",
+ "fields": [
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Queued\nSending\nSent\nFailed\nCancelled",
+   "default": "Queued",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "priority",
+   "fieldtype": "Int",
+   "label": "Priority",
+   "default": 0,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "recipient",
+   "fieldtype": "Data",
+   "label": "Phone Number",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "recipient_name",
+   "fieldtype": "Data",
+   "label": "Recipient Name"
+  },
+  {
+   "fieldname": "message",
+   "fieldtype": "Long Text",
+   "label": "Message",
+   "reqd": 1
+  },
+  {
+   "fieldname": "section_source",
+   "fieldtype": "Section Break",
+   "label": "Source"
+  },
+  {
+   "fieldname": "reference_doctype",
+   "fieldtype": "Link",
+   "label": "DocType",
+   "options": "DocType"
+  },
+  {
+   "fieldname": "reference_name",
+   "fieldtype": "Data",
+   "label": "Document Name"
+  },
+  {
+   "fieldname": "template",
+   "fieldtype": "Link",
+   "label": "Template",
+   "options": "SMS Template"
+  },
+  {
+   "fieldname": "section_gateway",
+   "fieldtype": "Section Break",
+   "label": "Gateway"
+  },
+  {
+   "fieldname": "device",
+   "fieldtype": "Link",
+   "label": "Assigned Device",
+   "options": "SMS Device"
+  },
+  {
+   "fieldname": "sim_number",
+   "fieldtype": "Int",
+   "label": "SIM"
+  },
+  {
+   "fieldname": "gateway_message_id",
+   "fieldtype": "Data",
+   "label": "Gateway Message ID"
+  },
+  {
+   "fieldname": "section_retry",
+   "fieldtype": "Section Break",
+   "label": "Retry",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "retry_count",
+   "fieldtype": "Int",
+   "label": "Retry Count",
+   "default": 0
+  },
+  {
+   "fieldname": "max_retries",
+   "fieldtype": "Int",
+   "label": "Max Retries",
+   "default": 3
+  },
+  {
+   "fieldname": "error_log",
+   "fieldtype": "Long Text",
+   "label": "Error Log"
+  },
+  {
+   "fieldname": "section_timing",
+   "fieldtype": "Section Break",
+   "label": "Timing"
+  },
+  {
+   "fieldname": "scheduled_at",
+   "fieldtype": "Datetime",
+   "label": "Scheduled At",
+   "description": "Leave empty for immediate"
+  },
+  {
+   "fieldname": "sent_at",
+   "fieldtype": "Datetime",
+   "label": "Sent At",
+   "read_only": 1
+  }
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 0,
+   "print": 0,
+   "report": 1,
+   "export": 1,
+   "import": 0,
+   "share": 0
+  },
+  {
+   "role": "All",
+   "read": 1,
+   "write": 0,
+   "create": 0,
+   "delete": 0,
+   "email": 0,
+   "print": 0,
+   "report": 0,
+   "export": 0,
+   "import": 0,
+   "share": 0
+  }
+ ]
+}
