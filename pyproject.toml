@@ -1,0 +1,6 @@
+[tool.setuptools]
+find = { where = ["."] }
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["sms_relay*"]
