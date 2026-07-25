@@ -33,8 +33,8 @@ ERPNext (Invoice/Payment)
 
 ## Requirements
 
-- Frappe Framework v14+ / v15+
-- ERPNext v14+ (for Sales Invoice, Payment Entry, Payment Request)
+- Frappe Framework v15+
+- ERPNext v15+ (for Sales Invoice, Payment Entry, Payment Request)
 - [Android SMS Gateway](https://github.com/bipin2017/sms-gateway) server running in Docker
 - At least one Android phone connected to the gateway
 
