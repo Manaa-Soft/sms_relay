@@ -1,3 +1,30 @@
+"""Frappe document event handlers for SMS notifications.
+
+This module contains ``doc_events`` hooks that trigger SMS messages when
+specific ERPNext/Frappe documents are submitted.  The three supported
+document types are:
+
+* **Sales Invoice** – ``on_invoice_submit``
+* **Payment Entry** – ``on_payment_submit``
+* **Payment Request** – ``on_payment_request_submit``
+
+Each handler follows a common flow:
+
+1. Fetch the global SMS gateway configuration via ``_get_gateway_config``.
+2. Check the relevant feature flag (e.g. ``send_invoice_sms``) – bail out
+   early when the feature is disabled.
+3. Determine the recipient's phone number by walking the Contact → Dynamic
+   Link chain for the associated party (Customer, Supplier, etc.).
+4. Verify the phone number is **not** opted-out of SMS notifications.
+5. Build a Jinja-renderable context dict from the document fields.
+6. Render the configured Jinja template (or fall back to a plain-text
+   default message).
+7. Enqueue the SMS for delivery via ``_enqueue_sms``.
+
+Helper functions for phone-number lookup live at the bottom of this module
+(``_get_supplier_phone`` and ``_clean_phone_from_party``).
+"""
+
 import frappe
 from frappe import _
 from frappe.utils import fmt_money, getdate, nowdate
@@ -12,7 +39,45 @@ from sms_relay.sms_engine import (
 
 
 def on_invoice_submit(doc, method):
-    """Sales Invoice on_submit hook – sends invoice notification SMS."""
+    """Send an SMS notification when a Sales Invoice is submitted.
+
+    Triggered by the ``doc_events`` hook for **Sales Invoice** ``on_submit``.
+
+    The handler first checks the gateway config flag ``send_invoice_sms``.
+    When disabled the function returns immediately without side-effects.
+
+    **Flow:**
+
+    1. Guard: feature flag ``send_invoice_sms`` must be enabled.
+    2. Guard: ``doc.doctype`` must be ``"Sales Invoice"``.
+    3. Guard: the invoice must have a ``customer``.
+    4. Resolve the customer's phone number via ``_get_customer_phone``.
+    5. Guard: the phone must not be opted-out (``_check_opt_out``).
+    6. Build the template context dict (see *Template Variables* below).
+    7. Render the Jinja template named in ``config["invoice_template"]``,
+       or fall back to a built-in plain-text string.
+    8. Enqueue the SMS at **priority 1**.
+
+    Args:
+        doc: The Sales Invoice document instance being submitted.
+        method: The Frappe hook method name (``"on_submit"``).  Present for
+            API compatibility but not used inside the function.
+
+    Returns:
+        None.  Side-effect: an SMS is enqueued when all guards pass.
+
+    Template Variables:
+        customer_name (str): Display name of the customer.
+        customer (str): ID of the customer record.
+        invoice_name (str): Name / ID of the Sales Invoice.
+        posting_date (str): Invoice date formatted as ``DD-MM-YYYY``.
+        due_date (str): Due date formatted as ``DD-MM-YYYY``, or empty.
+        total (str): Grand total formatted with currency symbol.
+        outstanding (str): Outstanding amount formatted with currency symbol.
+        company (str): Company name from the invoice.
+        items (list[dict]): Line items, each containing ``item_name``,
+            ``qty``, and ``amount`` (formatted with currency symbol).
+    """
     config = _get_gateway_config()
     if not config.get("send_invoice_sms"):
         return
@@ -69,7 +134,48 @@ def on_invoice_submit(doc, method):
 
 
 def on_payment_submit(doc, method):
-    """Payment Entry on_submit hook – sends payment receipt SMS."""
+    """Send an SMS notification when a Payment Entry is submitted.
+
+    Triggered by the ``doc_events`` hook for **Payment Entry** ``on_submit``.
+
+    The handler first checks the gateway config flag ``send_payment_sms``.
+    When disabled the function returns immediately without side-effects.
+
+    **Flow:**
+
+    1. Guard: feature flag ``send_payment_sms`` must be enabled.
+    2. Guard: ``doc.doctype`` must be ``"Payment Entry"``.
+    3. Guard: the payment must have a ``party``.
+    4. Resolve the party's phone number based on ``party_type``:
+
+       * ``"Customer"`` → ``_get_customer_phone``
+       * ``"Supplier"``  → ``_get_supplier_phone``
+       * Anything else  → ``_clean_phone_from_party``
+
+    5. Guard: the phone must not be opted-out (``_check_opt_out``).
+    6. Build the template context dict (see *Template Variables* below).
+    7. Render the Jinja template named in ``config["payment_template"]``,
+       or fall back to a built-in plain-text string.
+    8. Enqueue the SMS at **priority 2**.
+
+    Args:
+        doc: The Payment Entry document instance being submitted.
+        method: The Frappe hook method name (``"on_submit"``).  Present for
+            API compatibility but not used inside the function.
+
+    Returns:
+        None.  Side-effect: an SMS is enqueued when all guards pass.
+
+    Template Variables:
+        party_name (str): ID of the receiving party.
+        party_type (str): Frappe DocType of the party (e.g. ``"Customer"``).
+        payment_name (str): Name / ID of the Payment Entry.
+        amount (str): Paid amount formatted with currency symbol.
+        posting_date (str): Payment date formatted as ``DD-MM-YYYY``.
+        payment_method (str): Mode of payment, or empty string.
+        reference (str): Reference document name, or empty string.
+        company (str): Company name from the payment entry.
+    """
     config = _get_gateway_config()
     if not config.get("send_payment_sms"):
         return
@@ -129,7 +235,52 @@ def on_payment_submit(doc, method):
 
 
 def on_payment_request_submit(doc, method):
-    """Payment Request on_submit hook – sends payment link SMS."""
+    """Send an SMS with a payment link when a Payment Request is submitted.
+
+    Triggered by the ``doc_events`` hook for **Payment Request**
+    ``on_submit``.
+
+    The handler first checks the gateway config flag
+    ``send_payment_request_sms``.  When disabled the function returns
+    immediately without side-effects.
+
+    **Flow:**
+
+    1. Guard: feature flag ``send_payment_request_sms`` must be enabled.
+    2. Guard: ``doc.doctype`` must be ``"Payment Request"``.
+    3. Guard: the request must have a ``party``.
+    4. Resolve the party's phone number based on ``party_type``:
+
+       * ``"Customer"`` → ``_get_customer_phone``
+       * ``"Supplier"``  → ``_get_supplier_phone``
+
+    5. Guard: the phone must not be opted-out (``_check_opt_out``).
+    6. Attempt to fetch the ``grand_total`` from the referenced document
+       (if ``reference_doctype`` / ``reference_docname`` are set).
+    7. Build the template context dict (see *Template Variables* below).
+    8. Render the Jinja template named in
+       ``config["payment_request_template"]``, or fall back to a built-in
+       plain-text string that includes the payment redirect URL.
+    9. Enqueue the SMS at **priority 1**.
+
+    Args:
+        doc: The Payment Request document instance being submitted.
+        method: The Frappe hook method name (``"on_submit"``).  Present for
+            API compatibility but not used inside the function.
+
+    Returns:
+        None.  Side-effect: an SMS is enqueued when all guards pass.
+
+    Template Variables:
+        party_name (str): ID of the receiving party.
+        request_name (str): Name / ID of the Payment Request.
+        amount (str): Requested grand total formatted with currency symbol.
+        grand_total (str): Grand total of the referenced document formatted
+            with currency symbol (falls back to ``"0"`` if unavailable).
+        posting_date (str): Request creation date formatted as ``DD-MM-YYYY``.
+        payment_url (str): Redirect URL for completing the payment.
+        company (str): Company name from the payment request.
+    """
     config = _get_gateway_config()
     if not config.get("send_payment_request_sms"):
         return
@@ -196,7 +347,31 @@ def on_payment_request_submit(doc, method):
 # ---------------------------------------------------------------------------
 
 def _get_supplier_phone(supplier_name):
-    """Look up primary phone for a Supplier via Contact chain."""
+    """Look up the primary phone number for a Supplier via the Contact chain.
+
+    The lookup proceeds in two stages:
+
+    1. **Contact → Dynamic Link join** – queries ``tabContact`` joined with
+       ``tabDynamic Link`` to find contacts linked to the given Supplier.
+       Results are ordered by ``is_primary_contact DESC`` so the primary
+       contact's number is returned first.  ``mobile_no`` is preferred over
+       ``phone``.
+    2. **Direct Supplier fields** – if no linked contacts are found, the
+       function falls back to reading ``mobile_no`` / ``phone`` attributes
+       directly from the Supplier document.
+
+    In both cases the raw number is passed through ``_clean_phone`` before
+    returning.
+
+    Args:
+        supplier_name (str): The name / ID of the Supplier to look up.
+            When falsy, the function short-circuits and returns an empty
+            string.
+
+    Returns:
+        str: A cleaned phone number string, or an empty string when no
+        number could be determined.
+    """
     if not supplier_name:
         return ""
 
@@ -229,7 +404,24 @@ def _get_supplier_phone(supplier_name):
 
 
 def _clean_phone_from_party(party, party_type):
-    """Generic phone lookup for any party type that has a phone field."""
+    """Perform a generic phone-number lookup for an arbitrary party type.
+
+    Unlike ``_get_customer_phone`` / ``_get_supplier_phone`` which walk the
+    Contact → Dynamic Link chain, this helper fetches the party document
+    directly and reads its ``mobile_no`` or ``phone`` attributes.
+
+    This is used as a catch-all when ``party_type`` is neither ``"Customer"``
+    nor ``"Supplier"``.
+
+    Args:
+        party (str): The name / ID of the party record to look up.
+        party_type (str): The Frappe DocType of the party (e.g.
+            ``"Employee"``, ``"Student"``, etc.).
+
+    Returns:
+        str: A cleaned phone number string, or an empty string when the
+        party document cannot be fetched or has no phone fields.
+    """
     from sms_relay.sms_engine import _clean_phone
 
     try:

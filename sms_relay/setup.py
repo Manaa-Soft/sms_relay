@@ -1,14 +1,62 @@
+"""Post-installation setup for the SMS Relay module.
+
+This module is executed automatically by Frappe after the ``sms_relay`` app is
+installed (via the ``after_install`` hook). It bootstraps the module with safe
+default configuration so that administrators can begin using the system
+immediately without manual data entry.
+
+Actions performed on install:
+    1. Creates the ``SMS Gateway Settings`` singleton document with all
+       features disabled, an empty gateway URL, sensible retry and rate-limit
+       values, and a default sender name of ``"SMSRelay"``. No gateway
+       credentials are stored -- the administrator must configure them
+       afterwards.
+    2. Creates four default ``SMS Template`` documents for common ERPNext
+       workflows: Invoice Notification, Payment Received, Payment Request, and
+       Overdue Reminder. Each template uses Jinja2 syntax with placeholder
+       variables that are populated at send time.
+
+All inserts use ``ignore_permissions=True`` because this code runs during the
+Frappe migration/install context where permission checks are not applicable.
+Existing documents are never overwritten.
+"""
+
 import frappe
 
 
 def after_install():
-    """Create default SMS Gateway Settings and SMS Templates after app install."""
+    """Entry point called by Frappe after the ``sms_relay`` app is installed.
+
+    Orchestrates the one-time setup of the SMS Relay module by delegating to
+    two private helpers that create the gateway settings singleton and the
+    default SMS templates.
+
+    Returns:
+        None
+    """
     _create_gateway_settings()
     _create_sms_templates()
 
 
 def _create_gateway_settings():
-    """Create the SMS Gateway Settings singleton with sensible defaults."""
+    """Create the ``SMS Gateway Settings`` singleton with safe default values.
+
+    If the singleton already exists the function returns immediately without
+    making any changes. The created document has all SMS-triggering features
+    disabled (``send_invoice_sms``, ``send_payment_sms``,
+    ``send_payment_request_sms``, ``send_overdue_reminders`` are all ``0``)
+    and ``enabled`` set to ``0`` so the gateway is inactive until explicitly
+    configured and turned on by an administrator.
+
+    Default values:
+        - ``default_sender``: ``"SMSRelay"``
+        - ``reminder_intervals``: ``"7,14,30,60,90"``
+        - ``max_retry_count``: ``3``
+        - ``rate_limit``: ``30``
+
+    Returns:
+        None
+    """
     if frappe.db.exists("SMS Gateway Settings", "SMS Gateway Settings"):
         return
 
@@ -38,7 +86,29 @@ def _create_gateway_settings():
 
 
 def _create_sms_templates():
-    """Create default SMS templates for invoice, payment, overdue, and payment request."""
+    """Create default SMS Template documents for common ERPNext events.
+
+    Four templates are created if they do not already exist:
+
+    1. **Invoice Notification** (``invoice_template``) -- Sent when a new
+       sales invoice is created. Contains customer name, invoice ID, total,
+       due date, and outstanding amount placeholders.
+    2. **Payment Received** (``payment_template``) -- Sent when a payment is
+       recorded. Contains party name, amount, posting date, and payment
+       reference placeholders.
+    3. **Payment Request** (``payment_request_template``) -- Sent when a
+       payment request is created. Contains party name, amount, and payment
+       URL placeholders.
+    4. **Overdue Reminder** (``overdue_template``) -- Sent for overdue
+       invoices. Contains customer name, invoice count, outstanding total,
+       days overdue, and invoice reference list placeholders.
+
+    Each template body uses Jinja2 syntax (``{{ variable }}``) and is stored
+    as the ``body`` field of an ``SMS Template`` document.
+
+    Returns:
+        None
+    """
     templates = [
         {
             "template_name": "Invoice Notification",
