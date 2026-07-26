@@ -7,6 +7,31 @@ from frappe.utils import now, cint
 from sms_relay.core.sms_utils import clean_phone, count_sms_parts, get_relay_settings
 
 @frappe.whitelist()
+def test_connection():
+    settings = get_relay_settings()
+    gateway_url = (settings.get("gateway_url") or "").rstrip("/")
+    api_path = (settings.get("api_path") or "/api/mobile/v1/device").lstrip("/")
+    username = settings.get("username") or ""
+    password = settings.get_password("password") or ""
+    timeout = cint(settings.get("timeout")) or 10
+    if not gateway_url:
+        return {"success": False, "error": "No gateway URL configured"}
+    import requests
+    url = "{}/{}".format(gateway_url, api_path)
+    try:
+        resp = requests.get(
+            url,
+            auth=requests.auth.HTTPBasicAuth(username, password) if username else None,
+            timeout=timeout,
+        )
+        if resp.status_code == 200:
+            data = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
+            return {"success": True, "device": data}
+        return {"success": False, "error": "HTTP {}: {}".format(resp.status_code, resp.text[:200])}
+    except requests.exceptions.RequestException as e:
+        return {"success": False, "error": str(e)[:200]}
+
+@frappe.whitelist()
 def send_sms_now(recipient=None, message=None, template=None, device=None, sim=None):
     if not recipient:
         frappe.throw(_("Recipient is required"))
@@ -59,7 +84,7 @@ def get_device_health():
         sent_today = frappe.db.count(
             "SMS Log",
             filters={
-                "device_name": device.name,
+                "device": device.name,
                 "status": "Sent",
                 "creation": [">=", frappe.utils.getdate()],
             },
@@ -67,7 +92,7 @@ def get_device_health():
         sent_hour = frappe.db.count(
             "SMS Log",
             filters={
-                "device_name": device.name,
+                "device": device.name,
                 "status": "Sent",
                 "creation": [">=", frappe.utils.add_to_date(now(), hours=-1)],
             },
@@ -130,7 +155,7 @@ def get_sms_stats():
         "delivered_today": frappe.db.count("SMS Log", filters={"delivery_status": "Delivered", "creation": [">=", today]}),
         "queued": frappe.db.count("SMS Queue", filters={"status": "Queued"}),
         "total_devices": frappe.db.count("SMS Device", filters={"is_active": 1}),
-        "active_devices": frappe.db.count("SMS Device", filters={"is_active": 1, "is_active": 1}),
+        "active_devices": frappe.db.count("SMS Device", filters={"is_active": 1}),
         "opted_out_count": frappe.db.count("SMS Opt Out", filters={"opted_out": 1}),
     }
     return stats
