@@ -1,0 +1,236 @@
+{
+ "app": "sms_relay",
+ "doctype": "Workspace",
+ "name": "SMS Relay",
+ "label": "SMS Relay",
+ "title": "SMS Relay",
+ "icon": "message-square",
+ "module": "SMS Relay",
+ "standard": 1,
+ "public": 1,
+ "type": "Workspace",
+ "sequence_id": 1,
+ "is_hidden": 0,
+ "content": "[{\"id\":\"h1\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>SMS Relay</b></span>\",\"col\":12}},{\"id\":\"c1\",\"type\":\"card\",\"data\":{\"card_name\":\"Messages\",\"col\":4}},{\"id\":\"c2\",\"type\":\"card\",\"data\":{\"card_name\":\"Bulk & Campaigns\",\"col\":4}},{\"id\":\"c3\",\"type\":\"card\",\"data\":{\"card_name\":\"Settings\",\"col\":4}}]",
+ "links": [
+  {
+   "type": "Card Break",
+   "label": "Messages",
+   "hidden": 0
+  },
+  {
+   "type": "Link",
+   "label": "SMS Queue",
+   "link_to": "SMS Queue",
+   "link_type": "DocType",
+   "onboard": 1,
+   "hidden": 0
+  },
+  {
+   "type": "Link",
+   "label": "SMS Outbox",
+   "link_to": "SMS Outbox",
+   "link_type": "DocType",
+   "hidden": 0
+  },
+  {
+   "type": "Link",
+   "label": "SMS Log",
+   "link_to": "SMS Log",
+   "link_type": "DocType",
+   "hidden": 0
+  },
+  {
+   "type": "Link",
+   "label": "SMS Notification Log",
+   "link_to": "SMS Notification Log",
+   "link_type": "DocType",
+   "hidden": 0
+  },
+  {
+   "type": "Link",
+   "label": "SMS Opt Out",
+   "link_to": "SMS Opt Out",
+   "link_type": "DocType",
+   "hidden": 0
+  },
+  {
+   "type": "Card Break",
+   "label": "Bulk & Campaigns",
+   "hidden": 0
+  },
+  {
+   "type": "Link",
+   "label": "SMS Bulk Message",
+   "link_to": "SMS Bulk Message",
+   "link_type": "DocType",
+   "onboard": 1,
+   "hidden": 0
+  },
+  {
+   "type": "Link",
+   "label": "SMS Recipient List",
+   "link_to": "SMS Recipient List",
+   "link_type": "DocType",
+   "hidden": 0
+  },
+  {
+   "type": "Link",
+   "label": "SMS Template",
+   "link_to": "SMS Template",
+   "link_type": "DocType",
+   "onboard": 1,
+   "hidden": 0
+  },
+  {
+   "type": "Card Break",
+   "label": "Settings",
+   "hidden": 0
+  },
+  {
+   "type": "Link",
+   "label": "SMS Gateway Settings",
+   "link_to": "SMS Gateway Settings",
+   "link_type": "DocType",
+   "onboard": 1,
+   "hidden": 0
+  },
+  {
+   "type": "Link",
+   "label": "SMS Device",
+   "link_to": "SMS Device",
+   "link_type": "DocType",
+   "hidden": 0
+  },
+  {
+   "type": "Link",
+   "label": "SMS Notification",
+   "link_to": "SMS Notification",
+   "link_type": "DocType",
+   "hidden": 0
+  }
+ ],
+ "shortcuts": [
+  {
+   "label": "SMS Queue",
+   "link_to": "SMS Queue",
+   "type": "DocType"
+  },
+  {
+   "label": "SMS Bulk Message",
+   "link_to": "SMS Bulk Message",
+   "type": "DocType"
+  },
+  {
+   "label": "SMS Gateway Settings",
+   "link_to": "SMS Gateway Settings",
+   "type": "DocType"
+  }
+ ],
+ "sidebar_items": [
+  {
+   "type": "Link",
+   "label": "Home",
+   "link_type": "Workspace",
+   "link_to": "SMS Relay",
+   "icon": "home"
+  },
+  {
+   "type": "Section Break",
+   "label": "Messages",
+   "icon": "message-square"
+  },
+  {
+   "type": "Link",
+   "label": "SMS Queue",
+   "link_type": "DocType",
+   "link_to": "SMS Queue",
+   "icon": "inbox"
+  },
+  {
+   "type": "Link",
+   "label": "SMS Outbox",
+   "link_type": "DocType",
+   "link_to": "SMS Outbox",
+   "icon": "mail"
+  },
+  {
+   "type": "Link",
+   "label": "SMS Log",
+   "link_type": "DocType",
+   "link_to": "SMS Log",
+   "icon": "file-text"
+  },
+  {
+   "type": "Link",
+   "label": "SMS Notification Log",
+   "link_type": "DocType",
+   "link_to": "SMS Notification Log",
+   "icon": "bell"
+  },
+  {
+   "type": "Link",
+   "label": "SMS Opt Out",
+   "link_type": "DocType",
+   "link_to": "SMS Opt Out",
+   "icon": "user-x"
+  },
+  {
+   "type": "Section Break",
+   "label": "Bulk & Campaigns",
+   "icon": "send"
+  },
+  {
+   "type": "Link",
+   "label": "SMS Bulk Message",
+   "link_type": "DocType",
+   "link_to": "SMS Bulk Message",
+   "icon": "zap"
+  },
+  {
+   "type": "Link",
+   "label": "SMS Recipient List",
+   "link_type": "DocType",
+   "link_to": "SMS Recipient List",
+   "icon": "users"
+  },
+  {
+   "type": "Section Break",
+   "label": "Templates",
+   "icon": "file-text"
+  },
+  {
+   "type": "Link",
+   "label": "SMS Template",
+   "link_type": "DocType",
+   "link_to": "SMS Template",
+   "icon": "code"
+  },
+  {
+   "type": "Section Break",
+   "label": "Settings",
+   "icon": "settings"
+  },
+  {
+   "type": "Link",
+   "label": "SMS Gateway Settings",
+   "link_type": "DocType",
+   "link_to": "SMS Gateway Settings",
+   "icon": "settings"
+  },
+  {
+   "type": "Link",
+   "label": "SMS Device",
+   "link_type": "DocType",
+   "link_to": "SMS Device",
+   "icon": "smartphone"
+  },
+  {
+   "type": "Link",
+   "label": "SMS Notification",
+   "link_type": "DocType",
+   "link_to": "SMS Notification",
+   "icon": "bell"
+  }
+ ]
+}

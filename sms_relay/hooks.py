@@ -1,8 +1,20 @@
 app_name = "sms_relay"
 app_title = "SMS Relay"
-app_publisher = "SMS Relay"
+app_publisher = "Manaa Soft"
 app_description = "Frappe/ERPNext SMS Gateway Integration"
 app_version = "1.0.0"
+app_logo_url = "/assets/sms_relay/images/sms_relay.svg"
+app_home = "/app/sms-relay"
+
+add_to_apps_screen = [
+    {
+        "name": app_name,
+        "logo": app_logo_url,
+        "title": app_title,
+        "route": app_home,
+        "sequence_id": 200,
+    }
+]
 
 app_include_js = [
     "/assets/sms_relay/js/sms_dashboard.js",

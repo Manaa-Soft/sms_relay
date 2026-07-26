@@ -1,0 +1,14 @@
+{
+ "js/sms_dashboard.js": [
+  "public/js/sms_dashboard.js"
+ ],
+ "js/bulk_message.js": [
+  "public/js/bulk_message.js"
+ ],
+ "js/notification_builder.js": [
+  "public/js/notification_builder.js"
+ ],
+ "js/sms_gateway_integration.js": [
+  "public/js/sms_gateway_integration.js"
+ ]
+}
