@@ -85,6 +85,9 @@ frappe.notification = {
 frappe.ui.form.on('SMS Notification', {
 	refresh: function(frm) {
 		frappe.notification.setup_fieldname_select(frm);
+		let is_parameter = frm.doc.template_type === "Parameter";
+		frm.toggle_display("section_break_fields", is_parameter);
+		frm.toggle_display("fields", is_parameter);
 		if (frm.doc.template) {
 			frm.trigger("load_template");
 		}
@@ -132,6 +135,11 @@ frappe.ui.form.on('SMS Notification', {
 	},
 	reference_doctype: function(frm) {
 		frappe.notification.setup_fieldname_select(frm);
+	},
+	template_type: function(frm) {
+		let is_parameter = frm.doc.template_type === "Parameter";
+		frm.toggle_display("section_break_fields", is_parameter);
+		frm.toggle_display("fields", is_parameter);
 	},
 });
 

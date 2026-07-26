@@ -63,6 +63,15 @@
    "reqd": 1
   },
   {
+   "fieldname": "template_type",
+   "fieldtype": "Select",
+   "label": "Template Type",
+   "options": "Jinja\nParameter",
+   "default": "Jinja",
+   "reqd": 1,
+   "description": "Jinja: use {{ doc.field }} syntax. Parameter: use {{1}}, {{2}} mapped via Fields table below."
+  },
+  {
    "fieldname": "code",
    "fieldtype": "Code",
    "label": "Preview",
@@ -138,19 +147,21 @@
    "fieldtype": "Code",
    "label": "Message Template (Jinja)",
    "options": "HTML",
-   "description": "Use {{ doc }}, {{ frappe.utils.nowdate() }}. Supports positional params {{1}}, {{2}} from Fields table above."
+   "description": "Use {{ doc }}, {{ frappe.utils.nowdate() }}. Jinja2 syntax."
   },
-  {
-   "fieldname": "section_break_fields",
-   "fieldtype": "Section Break",
-   "label": "Fields"
-  },
-  {
-   "fieldname": "fields",
-   "fieldtype": "Table",
-   "label": "Fields",
-   "options": "SMS Message Field",
-   "description": "Enter fields in the right sequence as per the template parameters."
+   {
+    "fieldname": "section_break_fields",
+    "fieldtype": "Section Break",
+    "label": "Fields",
+    "depends_on": "eval:doc.template_type == 'Parameter'"
+   },
+   {
+    "fieldname": "fields",
+    "fieldtype": "Table",
+    "label": "Fields",
+    "options": "SMS Message Field",
+    "description": "Enter fields in the right sequence as per the template parameters.",
+    "depends_on": "eval:doc.template_type == 'Parameter'"
   },
   {
    "fieldname": "property_section",
