@@ -10,19 +10,23 @@ from sms_relay.core.sms_utils import clean_phone, count_sms_parts, get_relay_set
 def test_connection():
     settings = get_relay_settings()
     gateway_url = (settings.get("gateway_url") or "").rstrip("/")
-    username = settings.get("username") or ""
-    password = settings.get_password("password") or ""
     timeout = cint(settings.get("timeout")) or 10
     if not gateway_url:
         return {"success": False, "error": "No gateway URL configured"}
     import requests
     url = "{}/api/mobile/v1/device".format(gateway_url)
+    headers = {}
+    auth = None
+    private_token = settings.get_password("private_token")
+    if private_token:
+        headers["Authorization"] = "Bearer {}".format(private_token)
+    else:
+        username = settings.get("username") or ""
+        password = settings.get_password("password") or ""
+        if username:
+            auth = requests.auth.HTTPBasicAuth(username, password)
     try:
-        resp = requests.get(
-            url,
-            auth=requests.auth.HTTPBasicAuth(username, password) if username else None,
-            timeout=timeout,
-        )
+        resp = requests.get(url, headers=headers, auth=auth, timeout=timeout)
         if resp.status_code == 200:
             data = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
             return {"success": True, "device": data}
@@ -38,17 +42,25 @@ def connect_device(device_name=None):
     base_url = (device.server_url or "").rstrip("/")
     if not base_url:
         return {"success": False, "error": "No server URL configured"}
-    username = device.username or ""
-    password = device.get_password("password") or ""
     import requests
-    auth = requests.auth.HTTPBasicAuth(username, password) if username else None
+    settings = get_relay_settings()
+    headers = {}
+    auth = None
+    private_token = settings.get_password("private_token")
+    if private_token:
+        headers["Authorization"] = "Bearer {}".format(private_token)
+    else:
+        username = device.username or ""
+        password = device.get_password("password") or ""
+        if username:
+            auth = requests.auth.HTTPBasicAuth(username, password)
     updates = {"is_online": 0, "last_heartbeat": now()}
     result = {"success": False}
 
     try:
         resp = requests.get(
             "{}/api/mobile/v1/device".format(base_url),
-            auth=auth, timeout=15,
+            headers=headers, auth=auth, timeout=15,
         )
         if resp.status_code == 200:
             data = resp.json()

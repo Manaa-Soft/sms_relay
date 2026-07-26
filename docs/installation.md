@@ -84,6 +84,7 @@ bench restart
    - Enabled: ✓
    - Server URL: `http://YOUR-SERVER-IP:8085`
    - API Path: `/api/3rdparty/v1/message` (default)
+   - Private Token: (from your Docker config.yml privateToken)
    - Routing Strategy: Round Robin (recommended)
    - Enable Failover: ✓
    - Global Rate Limit: 60

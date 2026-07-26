@@ -125,8 +125,6 @@ def _send_android_gateway(device, phone, message, sender):
     base_url = (device.server_url or "").rstrip("/")
     if not base_url:
         return {"success": False, "error": "No server URL configured on device"}
-    username = device.username or ""
-    password = device.get_password("password") or ""
     settings = get_relay_settings()
     api_path = (settings.get("api_path") or "/api/3rdparty/v1/message").lstrip("/")
     timeout = cint(settings.get("timeout")) or 30
@@ -136,13 +134,18 @@ def _send_android_gateway(device, phone, message, sender):
         "phoneNumbers": [phone],
         "simNumber": cint(device.sim_number) if device.sim_number else 1,
     }
+    headers = {"Content-Type": "application/json"}
+    auth = None
+    private_token = settings.get_password("private_token")
+    if private_token:
+        headers["Authorization"] = "Bearer {}".format(private_token)
+    else:
+        username = device.username or ""
+        password = device.get_password("password") or ""
+        if username:
+            auth = requests.auth.HTTPBasicAuth(username, password)
     try:
-        resp = requests.post(
-            url,
-            json=payload,
-            auth=requests.auth.HTTPBasicAuth(username, password) if username else None,
-            timeout=timeout,
-        )
+        resp = requests.post(url, json=payload, headers=headers, auth=auth, timeout=timeout)
         if resp.status_code in (200, 201, 202):
             data = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
             return {"success": True, "message_id": data.get("id") or data.get("messageId") or data.get("requestId")}

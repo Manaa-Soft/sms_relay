@@ -13,6 +13,7 @@ Singleton DocType — one record for the entire site.
 | Enabled | Check | 1 | Master toggle. When off, no SMS is sent. |
 | Server URL | Data | — | Gateway server URL (e.g. `http://192.168.1.15:8085`). |
 | API Path | Data | /api/3rdparty/v1/message | API endpoint path. |
+| Private Token | Password | — | Bearer token for server-level auth. Overrides device username/password. |
 | Timeout | Int | 15 | HTTP timeout in seconds. |
 | Max Retry Count | Int | 3 | Default retry attempts for failed sends. |
 
