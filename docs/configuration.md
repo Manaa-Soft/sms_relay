@@ -38,7 +38,7 @@ Singleton DocType — one record for the entire site.
 | Field | Type | Default | Description |
 |---|---|---|---|
 | Enable Incoming Webhooks | Check | 0 | Receive delivery receipts and incoming SMS. |
-| Webhook HMAC Secret | Password | — | Secret for verifying webhook signatures. |
+| Webhook HMAC Secret | Password | — | Secret for verifying webhook signatures (header: `X-Webhook-Signature`). |
 
 ---
 
@@ -54,10 +54,10 @@ Each Android phone or HTTP SMS API endpoint is a separate Device record.
 |---|---|---|---|
 | Device Name | Data | Yes | Human-readable label (e.g. "Office Phone"). |
 | Device ID | Data | No | Unique ID from the phone app. Filled by Connect Device. |
-| Mode | Select | Yes | Android SMS Gateway / Custom HTTP API. |
+| Mode | Select | Yes | Local / Cloud / Private. |
 | Server URL | Data | Yes | Gateway server URL for this device (e.g. `http://192.168.1.15:8085`). |
-| Username | Data | No | Gateway auth username. |
-| Password | Password | No | Gateway auth password. |
+| Username | Data | No | Gateway auth username (the `login` returned during phone registration). |
+| Password | Password | No | Gateway auth password (the `password` returned during phone registration). |
 | SIM Number | Select | No | SIM slot 1 or 2. |
 | Priority | Int | No | Lower = higher priority. |
 | Active | Check | Yes | Enable/disable device. |
@@ -79,14 +79,14 @@ Each Android phone or HTTP SMS API endpoint is a separate Device record.
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| Daily Quota | Int | 5000 | Max SMS per day. Resets daily. |
+| Daily Quota | Int | 200 | Max SMS per day. Resets daily. |
 | Sent Today | Int | 0 | Current day count (read-only). |
 | Hourly Quota | Int | 500 | Max SMS per hour. |
 
 ### Connect Device Button
 
 Click **Connect Device** in the form to auto-fetch device info from the gateway:
-- Queries `GET {server_url}/api/mobile/v1/device` for device details
+- Queries `GET {server_url}/api/mobile/v1/device` for device details (with Basic Auth)
 - Queries `GET {server_url}/health` for online status
 - Auto-fills: `device_id`, `device_model`, `carrier_name`, `sim_phone_number`, `app_version`, `battery_level`
 
@@ -105,11 +105,12 @@ Navigate to: **SMS Relay → SMS Template → New**
 | Field | Type | Required | Description |
 |---|---|---|---|
 | Template Name | Data | Yes | Unique name. |
-| Event | Select | Yes | Event type. |
 | Language | Link: Language | No | Template language. |
 | Header | Small Text | No | Prepended to every message. |
 | Message Template | Code | Yes | Jinja2 body — supports `{{ doc.field }}` and `{{1}}`, `{{2}}` positional params. |
 | Footer | Small Text | No | Appended to every message. |
+| Char Count | Int | No | Character count (read-only). |
+| SMS Parts | Int | No | SMS segments (read-only). |
 
 ### Template Variables
 
@@ -152,10 +153,11 @@ Configure automatic SMS triggers on ERPNext documents.
 | Notification Type | Select | Yes | DocType Event / Scheduler Event. |
 | Disabled | Check | No | Disable this rule. |
 | Reference DocType | Link: DocType | Yes | Target DocType (Sales Invoice, etc.). |
-| DocType Event | Select | Yes | On Submit / On Save / On Validate / On Payment / On Cancel / On TRASH. |
+| DocType Event | Select | Yes | On Submit / On Save / On Validate / etc. |
 | Field Name | Data | Yes | Field containing phone number. |
+| Template | Link: SMS Template | Yes | Linked SMS Template. |
 | Template Type | Select | Yes | **Jinja** (`{{ doc.field }}` syntax) or **Parameter** (`{{1}}`, `{{2}}` mapped via Fields table). |
-| Message Template | Code (Jinja) | Yes | Template body. |
+| Message Template | Code (HTML) | Yes | Template body (auto-loaded from linked template). |
 | Condition | Code (Python) | No | `return True` to send. |
 | Event Frequency | Select | No | How often to trigger (for scheduled notifications). |
 | Fields | Table: SMS Message Field | No | Maps `{{1}}`, `{{2}}` placeholders to document fields (Parameter mode only). |
@@ -177,7 +179,7 @@ Add rows to the **Fields** child table to map `{{1}}`, `{{2}}`, etc. to document
 | 2 | name | `{{2}}` = document's name value |
 | 3 | grand_total | `{{3}}` = document's grand_total value |
 
-You can mix both syntaxes in the same template — Jinja2 `{{ doc.field }}` and positional `{{1}}` work together when using **Jinja** template type.
+You can mix both syntaxes in **Jinja** mode — Jinja2 `{{ doc.field }}` and positional `{{1}}` work together.
 
 ### Condition Examples
 
@@ -254,3 +256,4 @@ phone,name
 - Gateway settings cached for 300 seconds
 - Opt-out list cached for 600 seconds
 - Round-robin counter cached per-cycle
+- Notification map cached in `sms_notification_map` key

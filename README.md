@@ -1,30 +1,63 @@
 # SMS Relay
 
-Frappe/ERPNext SMS gateway integration. Multi-device routing, bulk messaging, Jinja notifications, delivery tracking, and automated document hooks — all via Android SMS Gateway or custom HTTP SMS APIs.
+Frappe/ERPNext SMS gateway integration. Multi-device routing, bulk messaging, Jinja/Parameter templates, delivery tracking, and automated document hooks — all via Android SMS Gateway or custom HTTP SMS APIs.
 
 ## Architecture
 
 ```
 ERPNext (Invoice/Payment/Delivery/PO)
         │
-  hooks.py doc_events
+  hooks.py doc_events["*"]
         │
-  utils/notification_handler.py (Jinja render + condition check)
+  utils/__init__.py (notification map + after_commit dispatch)
+        │
+  SMS Notification (Jinja render / positional param replacement + condition check)
         │
   SMS Queue (priority tiers: High/Normal/Low)
         │
   sms_engine.py (device routing: Round Robin / Priority / Random)
         │
-  Android Phone / HTTP Gateway
+  Android Phone via Docker Server (Basic Auth → /api/3rdparty/v1/message)
         │
   webhook_receiver.py (delivery receipts + incoming SMS)
+```
+
+### Authentication Flow
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│ Frappe/ERPNext → Docker Server                                          │
+│                                                                         │
+│ POST /api/3rdparty/v1/message                                           │
+│ Auth: Basic Auth (username:password from SMS Device record)             │
+│ Response: 202 Accepted                                                  │
+│                                                                         │
+│ The Docker server validates credentials against its MySQL database.     │
+│ Credentials are the login:password returned when the phone registered.  │
+└─────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│ Phone App → Docker Server                                               │
+│                                                                         │
+│ Device Registration:                                                    │
+│   POST /api/mobile/v1/device                                            │
+│   Auth: Bearer <private_token> (private mode) or Basic Auth             │
+│   Response: { login, password, token, id }                              │
+│                                                                         │
+│ Polling Messages:                                                       │
+│   GET /api/mobile/v1/message                                            │
+│   Auth: Bearer <device_token>                                           │
+│                                                                         │
+│ The phone then sends SMS via the physical SIM card.                     │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
 ## Features
 
 - **Multi-device routing** — Round Robin, Priority, or Random selection with failover
 - **Bulk messaging** — CSV upload, recipient lists, batch processing with progress tracking
-- **Document notifications** — Jinja templates triggered on Sales Invoice, Payment Request, Delivery Note, Purchase Order, Employee Checkin
+- **Document notifications** — Jinja or Parameter templates triggered on any DocType event
+- **Template types** — Jinja (`{{ doc.field }}`) or Parameter (`{{1}}`, `{{2}}` positional)
 - **Async queue** — Priority tiers (High for OTP/Payment, Low for marketing)
 - **SMS Opt Out** — Automatic STOP blacklist with cache invalidation
 - **Delivery tracking** — Webhook delivery receipts with HMAC-SHA256 verification
@@ -32,6 +65,7 @@ ERPNext (Invoice/Payment/Delivery/PO)
 - **Character counter** — GSM-7 (160 chars) vs Unicode (70 chars) detection, multi-part SMS calculation
 - **REST API** — Send, bulk, health, preview, retry, stats, notification preview, test connection, connect device
 - **Dashboard** — Real-time device health, daily stats, auto-refresh
+- **Desk sidebar** — Appears in Frappe v16/v17 sidebar navigation
 
 ## Requirements
 
@@ -78,9 +112,9 @@ bench restart
 |---|---|
 | Device Name | Human-readable label (e.g. "Office Phone") |
 | Device ID | Unique ID from the phone app |
-| Mode | Android SMS Gateway / Custom HTTP API |
+| Mode | Local / Cloud / Private |
 | Server URL | Gateway server URL for this device |
-| Username / Password | Per-device authentication |
+| Username / Password | Per-device authentication (the credentials returned when the phone registered with the Docker server) |
 | SIM Number | SIM slot (1 or 2) |
 | Priority | Lower = higher priority |
 | Hourly/Daily Quota | Rate limits |
@@ -98,6 +132,12 @@ Use Jinja2 syntax with `{{ doc }}` to access document fields:
 Dear {{ doc.customer }}, your invoice {{ doc.name }} for {{ frappe.utils.fmt_money(doc.grand_total) }} is due on {{ doc.due_date }}. Please pay at your earliest convenience.
 ```
 
+Or use positional parameters mapped via SMS Notification Fields table:
+
+```
+Hello {{1}}, your order {{2}} is ready. Total: {{3}}
+```
+
 ### 4. Set Up Notifications
 
 **SMS Relay → SMS Notification → New**
@@ -107,8 +147,9 @@ Configure document-triggered SMS:
 - **Reference DocType**: Sales Invoice, Payment Request, etc.
 - **DocType Event**: On Submit / On Save / On Validate
 - **Field Name**: Field containing phone number
+- **Template**: Link to an SMS Template
 - **Template Type**: **Jinja** (use `{{ doc.field }}` syntax) or **Parameter** (use `{{1}}`, `{{2}}` mapped via Fields table)
-- **Message Template**: Template body
+- **Message Template**: Template body (auto-loaded from linked template)
 - **Fields** (Parameter mode only): Map each `{{N}}` to a DocType field name
 - **Condition**: Python expression (e.g., `return doc.grand_total > 1000`)
 
@@ -138,15 +179,15 @@ frappe.call({
 | SMS Outbox | Async outbox with exponential backoff retry |
 | SMS Recipient List | Saved target groups (e.g., "VIP Customers") |
 | SMS Recipient | Child table for recipient lists |
-| SMS Message Field | Dynamic field mapping for notifications |
+| SMS Message Field | Dynamic field mapping for positional parameters in notifications |
 
 ### Enhanced Existing (5)
 
 | DocType | Enhancements |
 |---|---|
 | SMS Gateway Settings | Routing strategy, rate limiting, webhook secret, failover |
-| SMS Device | Server URL, username/password, SIM info, device model, carrier, battery, quotas |
-| SMS Template | Language, header/footer, character counter |
+| SMS Device | Server URL, username/password, SIM info, device model, carrier, battery, quotas, Connect Device / Send Test SMS buttons |
+| SMS Template | Language, header/footer, character counter, positional param support |
 | SMS Log | Delivery status, delivery timestamp, channel, retry count |
 | SMS Queue | Priority tiers, target SIM, retry counts |
 
@@ -187,8 +228,8 @@ frappe.call({
 
 | Method | Description |
 |---|---|
-| `sms_relay.api.endpoints.test_connection` | Test gateway connectivity |
-| `sms_relay.api.endpoints.connect_device` | Fetch device info from gateway |
+| `sms_relay.api.endpoints.test_connection` | Test gateway connectivity (accepts optional `device_name` arg) |
+| `sms_relay.api.endpoints.connect_device` | Fetch device info from gateway (requires `device_name`) |
 | `sms_relay.api.endpoints.get_device_health` | Device health, battery, signal, quota usage |
 | `sms_relay.api.endpoints.preview_template` | Render template with real document data |
 | `sms_relay.api.endpoints.retry_sms` | Re-queue a failed SMS |
@@ -219,7 +260,7 @@ Supported events: `sms:delivered`, `sms:failed`, `sms:sent`, `sms:received`, `sy
 | Hourly | `check_device_health` | Heartbeat, battery, signal checks |
 | Daily | `send_overdue_reminders` | Overdue invoice notifications |
 | Daily | `retry_failed_sms` | Re-enqueue retryable failures |
-| Daily | `cleanup_old_logs` | Purge old SMS Log entries |
+| Daily | `cleanup_old_logs` | Purge old SMS Log entries (90-day retention) |
 | Daily | `reset_daily_quotas` | Reset device daily counters |
 
 ## Module Structure
@@ -227,7 +268,7 @@ Supported events: `sms:delivered`, `sms:failed`, `sms:sent`, `sms:received`, `sy
 ```
 sms_relay/sms_relay/
 ├── core/
-│   ├── sms_engine.py          # Device routing, gateway dispatch, E.164
+│   ├── sms_engine.py          # Device routing, gateway dispatch, E.164 normalization
 │   ├── notification_handler.py # Doc-event triggers with Jinja
 │   ├── bulk_engine.py          # CSV import, batch processing
 │   └── sms_utils.py            # Phone utils, GSM-7, HMAC verify
@@ -235,9 +276,9 @@ sms_relay/sms_relay/
 │   ├── webhook_receiver.py     # Incoming SMS + delivery reports
 │   └── endpoints.py            # REST API endpoints
 ├── utils/
+│   ├── __init__.py             # Notification map, after_commit dispatch, scheduler triggers
 │   ├── jinja_methods.py        # Custom Jinja filters
-│   ├── contact_manager.py      # Auto-link SMS to Contact/Lead
-│   └── notification_handler.py # Doc-event dispatch bridge
+│   └── contact_manager.py      # Auto-link SMS to Contact/Lead
 ├── doctype/                    # 14 DocTypes (9 new + 5 enhanced)
 ├── public/js/
 │   ├── sms_dashboard.js        # Real-time monitoring

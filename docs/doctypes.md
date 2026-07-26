@@ -46,10 +46,10 @@ Represents a registered Android phone or custom HTTP SMS API endpoint.
 |---|---|---|
 | device_name | Data | Human-readable label |
 | device_id | Data | Unique ID from phone app |
-| mode | Select | Android SMS Gateway / Custom HTTP API |
+| mode | Select | Local / Cloud / Private |
 | server_url | Data | Gateway server URL for this device |
-| username | Data | Gateway auth username |
-| password | Password | Gateway auth password |
+| username | Data | Gateway auth username (from phone registration) |
+| password | Password | Gateway auth password (from phone registration) |
 | sim_number | Select | SIM slot 1 or 2 |
 | priority | Int | Lower = higher priority |
 | is_active | Check | Enable/disable device |
@@ -69,9 +69,16 @@ Represents a registered Android phone or custom HTTP SMS API endpoint.
 #### Quotas
 | Field | Type | Description |
 |---|---|---|
-| daily_quota | Int | Max SMS per day (default: 5000) |
+| daily_quota | Int | Max SMS per day (default: 200) |
 | sent_today | Int | Current day count (read-only) |
 | hourly_quota | Int | Max SMS per hour (default: 500) |
+
+#### Gateway Auth
+| Field | Type | Description |
+|---|---|---|
+| gateway_type | Select | Android SMS Gateway / Custom HTTP API |
+| api_key | Password | API key for Custom HTTP API mode |
+| webhook_callback_url | Data | Webhook callback URL |
 
 #### Additional
 | Field | Type | Description |
@@ -100,8 +107,6 @@ Jinja2 message templates with header/footer, positional parameters, and characte
 | Field | Type | Description |
 |---|---|---|
 | template_name | Data | Unique template name |
-| event | Select | Event type |
-| enabled | Check | Enable/disable |
 | language | Link: Language | Template language |
 | header | Small Text | Prepended to message |
 | message_template | Code | Jinja2 body — supports `{{ doc.field }}` and `{{1}}`, `{{2}}` positional params |
@@ -275,11 +280,11 @@ Doc-triggered automated SMS rules with Jinja or Parameter templates.
 | notification_type | Select | DocType notification / Scheduler Event |
 | disabled | Check | Disable this rule |
 | reference_doctype | Link: DocType | Target DocType |
-| doctype_event | Select | On Submit / On Save / On Validate / On Payment / On Cancel / On TRASH |
+| doctype_event | Select | On Submit / On Save / On Validate / etc. |
 | field_name | Data | Field containing phone number |
-| template | Link: SMS Template | Linked template |
+| template | Link: SMS Template | Linked SMS Template |
 | template_type | Select | **Jinja** or **Parameter** — controls how the template body is rendered |
-| message_template | Code (Jinja) | Template body |
+| message_template | Code (HTML) | Template body (auto-loaded from linked template) |
 | condition | Code (Python) | `return True` to send |
 | event_frequency | Select | How often to trigger |
 | days_in_advance | Int | For scheduled: days before date field |

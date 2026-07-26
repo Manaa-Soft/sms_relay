@@ -5,10 +5,49 @@
 The `sms_relay` Frappe app bridges ERPNext business documents to physical Android phones (or custom HTTP SMS APIs) for SMS delivery.
 
 ```
-ERPNext ──▶ hooks.py ──▶ notification_handler ──▶ SMS Queue ──▶ sms_engine ──▶ Gateway ──▶ Phone
-                                                                                │
-                                                                          webhook_receiver ◀── Delivery receipts
+ERPNext ──▶ hooks.py ["*"] ──▶ utils/__init__.py ──▶ SMS Notification ──▶ SMS Queue ──▶ sms_engine ──▶ Docker Server ──▶ Phone
+                                                                                          │
+                                                                                    webhook_receiver ◀── Delivery receipts
 ```
+
+## Authentication
+
+The system uses a two-layer authentication model between three components:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Frappe/ERPNext ──── Basic Auth ────▶ Docker Server                          │
+│                                       (port 8085)                           │
+│                                                                             │
+│ POST /api/3rdparty/v1/message                                               │
+│ Authorization: Basic base64(login:password)                                 │
+│                                                                             │
+│ Credentials come from the SMS Device record (username/password).            │
+│ These are the same login:password the phone received during registration.   │
+│ The server validates against its MySQL database (bcrypt).                   │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Phone App ──── Bearer Token ────▶ Docker Server                             │
+│                                     (port 8085)                             │
+│                                                                             │
+│ Device Registration:                                                        │
+│   POST /api/mobile/v1/device                                                │
+│   Auth: Bearer <private_token> (private mode) or Basic Auth                 │
+│   Response: { login, password, token, id }                                  │
+│                                                                             │
+│ Message Polling:                                                            │
+│   GET /api/mobile/v1/message                                                │
+│   Auth: Bearer <device_token>                                               │
+│                                                                             │
+│ The phone stores login/password for display — Frappe uses these for SMS.   │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Key points:**
+- Basic Auth and JWT Bearer are **alternatives** for `/api/3rdparty/v1/message`, not combined
+- The `private_token` lives in the Docker server's `config.yml` — it secures device registration, not message sending
+- Frappe never sends Bearer tokens to the server — it always uses Basic Auth
 
 ## Module Structure
 
@@ -23,9 +62,9 @@ sms_relay/sms_relay/
 │   ├── webhook_receiver.py     # Incoming SMS & delivery status webhook
 │   └── endpoints.py            # REST APIs for external gateway sync
 ├── utils/
+│   ├── __init__.py             # Notification map, after_commit dispatch, scheduler triggers
 │   ├── jinja_methods.py        # Custom Jinja filters (money, date, clean phone)
-│   ├── contact_manager.py      # Auto-linking inbound SMS to Leads/Contacts/Customers
-│   └── notification_handler.py # Doc-event dispatch bridge
+│   └── contact_manager.py      # Auto-linking inbound SMS to Leads/Contacts/Customers
 ├── doctype/
 │   ├── sms_device/             # Connection, status, quotas, Connect Device button
 │   ├── sms_gateway_settings/   # Routing, rate limit, webhook secret, failover
@@ -35,12 +74,12 @@ sms_relay/sms_relay/
 │   ├── sms_opt_out/            # STOP blacklist
 │   ├── sms_bulk_message/       # Campaign manager
 │   ├── sms_bulk_recipient/     # Child table
-│   ├── sms_notification/       # Doc-triggered rules
+│   ├── sms_notification/       # Doc-triggered rules (Jinja or Parameter template type)
 │   ├── sms_notification_log/   # Audit log
 │   ├── sms_outbox/             # Async retry outbox
 │   ├── sms_recipient_list/     # Saved groups
 │   ├── sms_recipient/          # Child table
-│   └── sms_message_field/      # Dynamic field mapping
+│   └── sms_message_field/      # Positional parameter mapping for {{N}}
 ├── public/js/
 │   ├── sms_dashboard.js        # Real-time device health & stats
 │   ├── bulk_message.js         # CSV upload, progress bar, char counter
@@ -55,15 +94,27 @@ sms_relay/sms_relay/
 ### Outgoing SMS
 
 1. User submits Sales Invoice / Payment Request / Delivery Note / Purchase Order in ERPNext
-2. Frappe fires `doc_events` hook → `notification_handler.on_doc_event()`
-3. Handler loads matching SMS Notification records for the DocType
-4. For each notification: check event match → evaluate condition → resolve phone → render Jinja template
+2. Frappe fires `doc_events` hook → `utils/__init__.py` `run_server_script_for_doc_event()`
+3. Handler looks up matching SMS Notification records from cached notification map
+4. For each notification: check event match → evaluate condition → resolve phone → render message
 5. If valid: create SMS Queue entry (priority: High if payment/OTP, Normal otherwise)
 6. Every minute, `process_sms_queue()` picks up queued entries
 7. `sms_engine._select_device()` picks best device (routing strategy + quota + throttle)
-8. `_send_to_device()` makes HTTP POST to gateway with Basic Auth (`username:password`)
-9. Gateway returns 202 Accepted → Phone app picks up message and sends via SIM
+8. `_send_to_device()` makes HTTP POST to Docker server with Basic Auth (`username:password`)
+9. Docker server returns 202 Accepted → Phone app picks up message and sends via SIM
 10. `sms_log` updated with status and `gateway_message_id`
+
+### Message Rendering
+
+**Jinja mode** (`template_type == "Jinja"`):
+- Template body rendered via Jinja2 with `doc` context
+- Positional params `{{1}}`, `{{2}}` are also replaced from Fields table before Jinja rendering
+- Full access to document fields, filters, conditionals
+
+**Parameter mode** (`template_type == "Parameter"`):
+- Template body rendered by `_replace_positional_params()` only (no Jinja2)
+- `{{1}}`, `{{2}}` etc. replaced with values from the Fields child table
+- Fields table is visible; each row maps a position to a DocType field name
 
 ### Bulk SMS
 
@@ -79,7 +130,7 @@ sms_relay/sms_relay/
 
 1. Android phone sends delivery status to webhook URL
 2. `webhook_receiver.incoming_webhook()` receives POST
-3. HMAC signature verified (if configured)
+3. HMAC signature verified if configured (header: `X-Webhook-Signature`)
 4. Idempotency check via cache
 5. SMS Queue and SMS Log status updated
 6. If incoming SMS: Communication doc created, auto-linked to Contact/Lead
@@ -95,30 +146,35 @@ sms_relay/sms_relay/
 | `_select_device()` | Round Robin / Priority / Random routing |
 | `_check_quota()` | Daily quota check per device |
 | `_throttle_check()` | Per-device per-minute rate limit |
-| `_send_to_device()` | HTTP POST to gateway (reads api_path/timeout from settings, accepts 202) |
+| `_send_to_device()` | HTTP POST to gateway (Basic Auth, accepts 202) |
+| `_send_android_gateway()` | Android SMS Gateway payload construction |
+| `_send_custom_http()` | Custom HTTP API with Bearer token |
 | `_enqueue_sms()` | Create SMS Queue entry |
 | `_log_sms()` | Create SMS Log entry |
 | `_render_template()` | Jinja2 template rendering |
 
-### notification_handler.py
+### utils/__init__.py
 
 | Function | Purpose |
 |---|---|
-| `on_doc_event()` | Generic dispatcher for all doc_events |
-| `_should_send()` | Evaluate Python condition via safe_eval |
-| `_render_notification()` | Render Jinja template with doc context |
-| `_get_phone_number()` | Resolve phone from field or Contact chain |
-| `_send_notification_sms()` | Create queue entry with priority |
-| `_log_notification()` | Write SMS Notification Log |
+| `run_server_script_for_doc_event()` | Entry point for `doc_events["*"]` |
+| `get_notifications_map()` | Build/cache `{doctype: {event: [names]}}` map |
+| `_schedule_sms_notification()` | Schedule notification after commit |
+| `_send_sms_notification()` | Send SMS notification for a doc event |
+| `trigger_sms_notifications()` | Run scheduler-based notifications |
 
-### bulk_engine.py
+### tasks.py
 
 | Function | Purpose |
 |---|---|
-| `create_bulk_job()` | Create bulk message with CSV recipients |
-| `create_bulk_from_recipient_list()` | Load from saved Recipient List |
-| `process_bulk_job()` | Send batch of pending recipients |
-| `cancel_bulk_job()` | Cancel processing |
+| `process_sms_queue()` | Dispatch queued SMS to devices (every minute) |
+| `process_outbox()` | Process outbox with exponential backoff (every minute) |
+| `process_bulk_messages()` | Process bulk campaigns in batches (every minute) |
+| `check_device_health()` | Heartbeat, battery, signal checks (hourly) |
+| `send_overdue_reminders()` | Overdue invoice notifications (daily) |
+| `retry_failed_sms()` | Re-enqueue retryable failures (daily) |
+| `cleanup_old_logs()` | Purge old SMS Log entries (daily, 90-day retention) |
+| `reset_daily_quotas()` | Reset device daily counters (daily) |
 
 ### sms_utils.py
 
@@ -153,3 +209,4 @@ sms_relay/sms_relay/
 - Template render error → logged, notification skipped
 - Opt-out detected → SMS silently skipped
 - HMAC verification failure → webhook rejected
+- Missing device credentials → clear error message returned

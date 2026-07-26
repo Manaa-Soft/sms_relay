@@ -15,9 +15,9 @@ sms_relay registers jobs with the Frappe scheduler. These run automatically at t
    a. Validates phone number
    b. Selects device via routing strategy (Round Robin / Priority / Random)
    c. Checks per-minute rate limit
-   d. HTTP POST to gateway with Basic Auth (`username:password` from device)
-   e. On success (HTTP 200/202): status → "Sent", creates SMS Log entry
-   f. On failure: increments retry_count. If < max_retries → status stays "Queued". If >= max_retries → status → "Failed"
+   d. HTTP POST to Docker server with Basic Auth (`username:password` from SMS Device)
+   e. On success (HTTP 200/201/202): status → "Sent", creates SMS Log entry
+   f. On failure: increments retry_count. If < max_retries → status stays "Queued" with backoff. If >= max_retries → status → "Failed"
 4. Commits all database changes
 
 ---
@@ -33,7 +33,7 @@ sms_relay registers jobs with the Frappe scheduler. These run automatically at t
 2. For each entry:
    a. Checks max attempts not exceeded
    b. Selects device, checks rate limit
-   c. Sends via gateway
+   c. Sends via gateway with Basic Auth
    d. On success: status → "Sent"
    e. On failure: increments attempts, calculates next retry (2^attempts minutes)
    f. If max attempts exceeded: status → "Failed"
@@ -77,10 +77,8 @@ sms_relay registers jobs with the Frappe scheduler. These run automatically at t
 **What it does:**
 1. For each enabled device (`is_active = 1`):
    a. GET request to `{server_url}/api/mobile/v1/device` with Basic Auth
-   b. Update battery_level, signal_strength, carrier_name, device_model, app_version
-   c. GET `{server_url}/health` for online status
-   d. Update `is_online`, `last_heartbeat`
-   e. If unreachable → set is_online = 0
+   b. Update battery_level, signal_strength
+   c. If unreachable → set is_online = 0
 
 ---
 
@@ -146,20 +144,34 @@ scheduler_events = {
         "sms_relay.tasks.process_sms_queue",
         "sms_relay.tasks.process_outbox",
         "sms_relay.tasks.process_bulk_messages",
+        "sms_relay.utils.trigger_sms_notifications_all",
     ],
     "hourly": [
         "sms_relay.tasks.check_device_health",
+        "sms_relay.utils.trigger_sms_notifications_hourly",
     ],
     "daily": [
         "sms_relay.tasks.send_overdue_reminders",
         "sms_relay.tasks.retry_failed_sms",
         "sms_relay.tasks.cleanup_old_logs",
         "sms_relay.tasks.reset_daily_quotas",
+        "sms_relay.utils.trigger_sms_notifications_daily",
+    ],
+    "weekly": [
+        "sms_relay.utils.trigger_sms_notifications_weekly",
+    ],
+    "monthly": [
+        "sms_relay.utils.trigger_sms_notifications_monthly",
+    ],
+    "yearly": [
+        "sms_relay.utils.trigger_sms_notifications_yearly",
     ],
 }
 ```
 
 **Note:** Frappe's `"all"` scheduler runs approximately every 1-3 minutes.
+
+SMS Notifications with `notification_type == "Scheduler Event"` are triggered by the `trigger_sms_notifications_*` functions, which run at the frequency specified in their `event_frequency` field.
 
 ## Monitoring
 

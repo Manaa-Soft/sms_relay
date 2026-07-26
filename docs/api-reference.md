@@ -13,10 +13,12 @@ Send an SMS immediately, bypassing the queue.
 | Name | Type | Required | Description |
 |---|---|---|---|
 | recipient | str or list | Yes | Phone number(s), auto-normalized to E.164 |
-| message | str | Yes | SMS body text |
-| template | str | No | SMS Template name (overrides message) |
+| message | str | Yes* | SMS body text |
+| template | str | Yes* | SMS Template name (overrides message) |
 | device | str | No | Force specific device (auto-select if omitted) |
 | sim | int | No | SIM slot (1 or 2) |
+
+*Either `message` or `template` is required.
 
 **Returns:**
 ```json
@@ -54,12 +56,13 @@ Create a bulk SMS campaign from CSV.
 | Name | Type | Required | Description |
 |---|---|---|---|
 | recipients_csv | str | Yes* | CSV with phone,name columns |
+| recipients_json | str | Yes* | JSON array with phone fields |
 | message | str | Yes* | SMS body text |
 | template | str | No | SMS Template name |
 | account | str | No | Device name |
 | scheduled_at | str | No | Deferred send time (YYYY-MM-DD HH:MM:SS) |
 
-*Either `recipients_csv` or `recipients_json` is required.
+*Either `recipients_csv` or `recipients_json` is required. Either `message` or `template` is required.
 
 **Returns:**
 ```json
@@ -78,14 +81,21 @@ Test connectivity to the SMS gateway server.
 
 **Path:** `sms_relay.api.endpoints.test_connection`
 
-**Parameters:** None
+**Parameters:**
+
+| Name | Type | Required | Description |
+|---|---|---|---|
+| device_name | str | No | SMS Device name. If provided, uses that device's server URL and credentials. Otherwise uses global Gateway Settings. |
 
 **Returns:**
 ```json
 {
     "success": true,
-    "status_code": 200,
-    "response": "..."
+    "device": {
+        "id": "device-001",
+        "name": "Samsung Galaxy S21",
+        "online": true
+    }
 }
 ```
 
@@ -101,27 +111,27 @@ Fetch device info from the SMS Gateway server and auto-fill SMS Device fields.
 
 | Name | Type | Required | Description |
 |---|---|---|---|
-| server_url | str | Yes | Gateway server URL (e.g. `http://192.168.1.15:8085`) |
-| username | str | Yes | Gateway auth username |
-| password | str | Yes | Gateway auth password |
+| device_name | str | Yes | SMS Device document name |
 
 **Returns:**
 ```json
 {
     "success": true,
-    "device_id": "phone-001",
-    "device_model": "Samsung Galaxy S21",
-    "carrier_name": "Vodafone",
-    "sim_phone_number": "+212600000000",
-    "app_version": "1.67.0",
-    "battery_level": 85,
-    "is_online": true
+    "updates": {
+        "is_online": 1,
+        "last_heartbeat": "2026-07-27 10:00:00",
+        "device_id": "phone-001",
+        "device_model": "Samsung Galaxy S21",
+        "carrier_name": "Vodafone",
+        "sim_phone_number": "+212600000000",
+        "battery_level": 85
+    }
 }
 ```
 
 Queries:
-- `GET {server_url}/api/mobile/v1/device` — device details
-- `GET {server_url}/health` — online status
+- `GET {server_url}/api/mobile/v1/device` — device details (Basic Auth)
+- `GET {server_url}/health` — online status (no auth)
 
 ---
 
@@ -141,16 +151,14 @@ Returns health status of all enabled SMS devices.
         "device_name": "Office Phone",
         "is_active": true,
         "battery_level": 85,
-        "signal_strength": "-75 dBm",
-        "sim_number": "1",
-        "carrier_name": "Vodafone",
-        "device_model": "Samsung Galaxy S21",
-        "app_version": "1.67.0",
+        "signal_strength": "Connected",
+        "sim_slot": 1,
+        "gateway_type": "Android SMS Gateway",
         "sent_today": 45,
-        "daily_quota": 5000,
+        "daily_quota": 200,
         "sent_this_hour": 3,
         "hourly_quota": 500,
-        "quota_usage_today": "0.9%"
+        "quota_usage_today": "22.5%"
     }
 ]
 ```

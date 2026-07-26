@@ -24,10 +24,15 @@ mkdir -p config
 
 # Create config.yml
 cat > config.yml << 'EOF'
+gateway:
+  mode: private    # "public" or "private"
+  private_token: "your-secret-token"  # Used for phone registration in private mode
+
 server:
-  port: 8085
+  port: 3000
   auth:
-    privateToken: "your-private-token-here"
+    jwt:
+      secret: "your-jwt-secret"
   webhooks:
     - url: "http://YOUR-FRAPPE-SITE/api/method/sms_relay.api.webhook_receiver.incoming_webhook"
       events:
@@ -37,21 +42,46 @@ server:
         - system:ping
 EOF
 
-# Start the server
+# Start the server (port 8085 via nginx or direct)
 docker run -d \
   --name sms-gateway \
-  -p 8085:8085 \
+  -p 8085:3000 \
   -v $(pwd)/config:/app/config \
   ghcr.io/android-sms-gateway/server:latest
 ```
+
+**Note:** The Go server runs on port 3000 internally. Map it to 8085 (or any port) on the host. If using nginx, configure it to proxy 8085 → 3000.
+
+### Understanding Authentication
+
+The Docker server has two API namespaces:
+
+| Endpoint | Purpose | Auth |
+|---|---|---|
+| `POST /api/3rdparty/v1/message` | Frappe sends SMS | **Basic Auth** with device `login:password` |
+| `POST /api/mobile/v1/device` | Phone registers | **Bearer `private_token`** (private mode) or Basic Auth |
+
+The `private_token` in `config.yml` secures **device registration** — it's a server-side secret, NOT sent by Frappe.
+
+When a phone registers, the server returns:
+```json
+{
+    "id": "device-id",
+    "token": "bearer-token-for-phone",
+    "login": "G9G_SA",
+    "password": "123456789101112"
+}
+```
+
+The `login`/`password` are what you enter on the **SMS Device** record in Frappe. Frappe uses these for Basic Auth when sending SMS.
 
 ### Android Phone Setup
 
 1. Install SMS Gateway app from GitHub Releases
 2. Open app → Settings → Server URL → enter `http://YOUR-SERVER-IP:8085`
-3. Enter credentials (username/password from your config)
-4. Select connection mode (Private for LAN, Cloud for internet)
-5. Phone should show "Connected" status
+3. In **private mode**: enter the `private_token` from `config.yml`
+4. Phone registers and shows "Connected" status
+5. Note the `login`/`password` shown in the app — you'll need these for Frappe
 
 ## Step 2: Install sms_relay App
 
@@ -84,7 +114,6 @@ bench restart
    - Enabled: ✓
    - Server URL: `http://YOUR-SERVER-IP:8085`
    - API Path: `/api/3rdparty/v1/message` (default)
-   - Private Token: (from your Docker config.yml privateToken)
    - Routing Strategy: Round Robin (recommended)
    - Enable Failover: ✓
    - Global Rate Limit: 60
@@ -96,10 +125,10 @@ bench restart
 1. Go to **SMS Relay → SMS Device → New**
 2. Fill in:
    - Device Name: "Office Phone"
-   - Mode: Android SMS Gateway
+   - Mode: Private
    - Server URL: `http://YOUR-SERVER-IP:8085`
-   - Username: (from phone app settings)
-   - Password: (from phone app settings)
+   - Username: (the `login` from the phone app — e.g. `G9G_SA`)
+   - Password: (the `password` from the phone app — e.g. `123456789101112`)
    - Priority: 0 (highest)
    - Active: ✓
 3. Save
@@ -123,9 +152,10 @@ Dear {{ doc.customer }}, your invoice {{ doc.name }} for {{ frappe.utils.fmt_mon
 2. Configure:
    - Notification Type: DocType notification
    - Reference DocType: Sales Invoice
-   - DocType Event: On Submit
+   - DocType Event: After Submit
    - Field Name: customer_contact_person (or the field with phone)
-   - Message Template: (your Jinja template)
+   - Template: Select your SMS Template
+   - Template Type: Jinja (or Parameter if using positional params)
    - Condition: `return doc.outstanding_amount > 0`
 3. Save
 
@@ -136,6 +166,7 @@ Dear {{ doc.customer }}, your invoice {{ doc.name }} for {{ frappe.utils.fmt_mon
 ```javascript
 frappe.call({
     method: "sms_relay.api.endpoints.test_connection",
+    args: { device_name: "Office Phone" },  // optional
     callback: function(r) {
         console.log(r.message);
     }
@@ -166,10 +197,10 @@ frappe.call({
 - [ ] Android phone connected and showing "Connected"
 - [ ] SMS Gateway Settings configured and enabled
 - [ ] Test Connection successful
-- [ ] At least one SMS Device added and active
+- [ ] At least one SMS Device added and active with correct username/password
 - [ ] Connect Device successful (device info auto-filled)
 - [ ] Test SMS sent and received
-- [ ] Webhook configured for delivery receipts
+- [ ] Webhook configured for delivery receipts (in server config.yml)
 - [ ] (Optional) SMS Templates created
 - [ ] (Optional) SMS Notifications configured
 - [ ] (Optional) SMS Opt Out list populated

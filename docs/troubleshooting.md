@@ -72,6 +72,7 @@ frappe.get_all("SMS Bulk Message", filters={"status": ["in", ["Processing", "Dra
 2. No active/online devices (`is_active = 1`)
 3. All devices at quota limit
 4. Scheduler not running
+5. Missing device credentials (username/password)
 
 **Fixes:**
 1. Check `SMS Gateway Settings.enabled` is 1
@@ -79,6 +80,7 @@ frappe.get_all("SMS Bulk Message", filters={"status": ["in", ["Processing", "Dra
 3. Check `sent_today < daily_quota` on devices
 4. Check scheduler: `bench doctor`
 5. Manually trigger: `bench execute sms_relay.tasks.process_sms_queue`
+6. Verify device has username/password set (Basic Auth required)
 
 ---
 
@@ -89,11 +91,12 @@ frappe.get_all("SMS Bulk Message", filters={"status": ["in", ["Processing", "Dra
 | Error | Cause | Fix |
 |---|---|---|
 | `ConnectionError` | Cannot reach gateway | Check server URL, network, Docker |
-| `HTTPError 401` | Auth failed | Check username/password on SMS Device |
-| `HTTPError 403` | Forbidden | Check credentials |
-| `HTTPError 404` | Wrong API path | Check API Path in SMS Gateway Settings |
+| `HTTP 401` | Auth failed | Check username/password on SMS Device |
+| `HTTP 403` | Forbidden | Check credentials |
+| `HTTP 404` | Wrong API path | Check API Path in SMS Gateway Settings |
 | `Timeout` | Server too slow | Check network, increase Timeout setting |
 | `No device available` | All devices offline/quota | Check device status |
+| `No credentials: set username/password` | Missing Basic Auth | Set username/password on SMS Device |
 
 **Fix:** Click "Retry" on SMS Queue, or wait for daily retry job.
 
@@ -123,13 +126,15 @@ curl -X POST http://YOUR-FRAPPE-SITE/api/method/sms_relay.api.webhook_receiver.i
 3. Phone field doesn't contain phone number
 4. Condition returning False
 5. Jinja template error
+6. Reference DocType mismatch
 
 **Fixes:**
 1. Check SMS Notification `disabled` is unchecked
 2. Verify `doctype_event` matches your workflow (submit vs save)
 3. Verify `field_name` matches a field on the DocType
 4. Test condition: `return True` to always send
-5. Use "Test Notification" button in the form
+5. Use "Preview Message" button in the form
+6. Check the linked SMS Template has a message_template body
 
 ---
 
@@ -152,10 +157,11 @@ curl -X POST http://YOUR-FRAPPE-SITE/api/method/sms_relay.api.webhook_receiver.i
 
 **Fixes:**
 1. Use SMS Template → check character counter
-2. Use "Preview" button to test rendering
+2. Use "Preview Message" button to test rendering
 3. Use `{{ doc.fieldname }}` for document fields
 4. Test with simple template: `Hello {{ doc.customer }}`
 5. Check Jinja2 syntax (no Python code in templates)
+6. For Parameter mode: ensure Fields table has rows mapping `{{1}}`, `{{2}}` etc.
 
 ---
 
@@ -186,3 +192,4 @@ curl -X POST http://YOUR-FRAPPE-SITE/api/method/sms_relay.api.webhook_receiver.i
 3. **Priority tiers** — Use High for OTP/payment, Low for marketing
 4. **Clean logs** — Default 90-day retention keeps tables manageable
 5. **Use condition filters** — Don't send SMS for every document, use conditions
+6. **Check credentials** — Ensure all SMS Devices have username/password set for Basic Auth
