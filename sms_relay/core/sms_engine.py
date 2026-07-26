@@ -34,7 +34,7 @@ def send_sms(receiver_list, msg, sender="", **kwargs):
         if result.get("success"):
             _log_sms(phone, msg, "Sent", device_name=device, gateway_message_id=result.get("message_id"))
         else:
-            _enqueue_sms(phone, msg, device, error=result.get("error"))
+            _enqueue_sms(phone, msg, device, priority="Normal")
 
 def send_sms_override(recipient, message, sender=None, **kwargs):
     if isinstance(recipient, str):
@@ -159,26 +159,27 @@ def _send_custom_http(device, phone, message, sender):
 
 def _log_sms(phone, message, status, device_name=None, gateway_message_id=None, error=None):
     log = frappe.new_doc("SMS Log")
-    log.phone_number = phone
+    log.phone = phone
     log.message = message
     log.status = status
-    log.device_name = device_name
+    if device_name:
+        log.device = device_name
     log.gateway_message_id = gateway_message_id
     if error:
-        log.error = error
+        log.error_message = error
     log.insert(ignore_permissions=True)
     frappe.db.commit()
     return log
 
 def _enqueue_sms(phone, message, device_name=None, priority="Normal", channel="SMS", max_retries=3):
     queue = frappe.new_doc("SMS Queue")
-    queue.phone_number = phone
+    queue.recipient = phone
     queue.message = message
     queue.status = "Queued"
     queue.priority_tier = priority
     queue.max_retries = max_retries
     if device_name:
-        queue.device_name = device_name
+        queue.device = device_name
     queue.insert(ignore_permissions=True)
     frappe.db.commit()
     return queue
