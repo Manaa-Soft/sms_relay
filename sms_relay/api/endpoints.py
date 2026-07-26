@@ -9,17 +9,12 @@ from sms_relay.core.sms_utils import clean_phone, count_sms_parts, get_relay_set
 
 
 def _get_gateway_auth(settings, device=None):
-    """Resolve auth for the Android SMS Gateway.
+    """Resolve auth for the Android SMS Gateway server.
 
-    Priority:
-    1. Gateway Settings ``private_token`` → Bearer token (server-level)
-    2. Device ``username`` / ``password`` → Basic Auth (device-level)
+    The Docker server uses Basic Auth with device credentials.
     """
     headers = {"Content-Type": "application/json"}
     auth = None
-    private_token = settings.get_password("private_token")
-    if private_token:
-        headers["Authorization"] = "Bearer {}".format(private_token)
     if device:
         username = device.username or ""
         password = device.get_password("password") or ""

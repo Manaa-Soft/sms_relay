@@ -142,31 +142,20 @@ def _send_android_gateway(device, phone, message, sender, queue_doc=None):
         tier = queue_doc.priority_tier or "Normal"
         payload["priority"] = priority_map.get(tier, 0)
 
-    attempts = []
-    private_token = settings.get_password("private_token")
     username = device.username or ""
     password = device.get_password("password") or ""
+    if not username:
+        return {"success": False, "error": "No credentials: set username/password on SMS Device '{}'".format(device.name)}
 
-    if private_token:
-        attempts.append({"headers": {"Content-Type": "application/json", "Authorization": "Bearer {}".format(private_token)}, "auth": None})
-    if username:
-        attempts.append({"headers": {"Content-Type": "application/json"}, "auth": requests.auth.HTTPBasicAuth(username, password)})
-    if not attempts:
-        return {"success": False, "error": "No auth credentials: set device username/password or Gateway Settings private_token"}
-
-    for attempt in attempts:
-        try:
-            resp = requests.post(url, json=payload, headers=attempt["headers"], auth=attempt["auth"], timeout=timeout)
-            if resp.status_code in (200, 201, 202):
-                data = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
-                return {"success": True, "message_id": data.get("id") or data.get("messageId") or data.get("requestId")}
-            if resp.status_code == 401 and len(attempts) > 1:
-                continue
-            return {"success": False, "error": "HTTP {}: {}".format(resp.status_code, resp.text[:200])}
-        except requests.exceptions.RequestException as e:
-            return {"success": False, "error": str(e)[:200]}
-
-    return {"success": False, "error": "All auth methods failed (401 Unauthorized)"}
+    auth = requests.auth.HTTPBasicAuth(username, password)
+    try:
+        resp = requests.post(url, json=payload, headers={"Content-Type": "application/json"}, auth=auth, timeout=timeout)
+        if resp.status_code in (200, 201, 202):
+            data = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
+            return {"success": True, "message_id": data.get("id") or data.get("messageId") or data.get("requestId")}
+        return {"success": False, "error": "HTTP {}: {}".format(resp.status_code, resp.text[:200])}
+    except requests.exceptions.RequestException as e:
+        return {"success": False, "error": str(e)[:200]}
 
 def _send_custom_http(device, phone, message, sender):
     base_url = (device.server_url or "").rstrip("/")

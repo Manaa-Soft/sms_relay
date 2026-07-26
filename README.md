@@ -63,7 +63,6 @@ bench restart
 | Enabled | Master on/off toggle |
 | Server URL | Gateway server URL (e.g. `http://192.168.1.15:8085`) |
 | API Path | Endpoint path (default: `/api/3rdparty/v1/message`) |
-| Private Token | Bearer token for server-level auth (overrides device username/password) |
 | Timeout | HTTP timeout in seconds |
 | Routing Strategy | Round Robin / Priority / Random |
 | Enable Failover | Use next device if primary fails |

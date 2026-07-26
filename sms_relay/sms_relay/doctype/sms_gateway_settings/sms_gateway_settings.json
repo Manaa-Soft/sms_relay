@@ -38,16 +38,10 @@
     "label": "API Path",
     "default": "/api/3rdparty/v1/message"
    },
-   {
-    "fieldname": "private_token",
-    "fieldtype": "Password",
-    "label": "Private Token",
-    "description": "Bearer token for server-level auth (overrides device username/password)"
-   },
-   {
-    "fieldname": "column_break_general1",
-    "fieldtype": "Column Break"
-   },
+    {
+     "fieldname": "column_break_general1",
+     "fieldtype": "Column Break"
+    },
   {
    "fieldname": "timeout",
    "fieldtype": "Int",

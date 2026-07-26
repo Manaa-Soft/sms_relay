@@ -14,7 +14,6 @@ Global configuration for the entire SMS relay system.
 | enabled | Check | Master on/off toggle |
 | gateway_url | Data | Gateway server URL (e.g. `http://192.168.1.15:8085`) |
 | api_path | Data | API endpoint path (default: `/api/3rdparty/v1/message`) |
-| private_token | Password | Bearer token for server-level auth (overrides device username/password) |
 | timeout | Int | HTTP timeout seconds (default: 15) |
 | max_retry_count | Int | Max retry attempts (default: 3) |
 
