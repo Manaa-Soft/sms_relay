@@ -126,13 +126,19 @@ class SMSNotification(Document):
     # ─── Shared helpers ──────────────────────────────────────────────
 
     def _render_message(self, doc):
-        """Render message from linked template or inline message_template."""
+        """Render message from linked template or inline message_template.
+
+        Supports two syntaxes:
+        1. Jinja2: {{ doc.field_name }} — rendered via Jinja2
+        2. Positional: {{1}}, {{2}} — replaced from the ``fields`` child table
+        """
         if self.template:
             try:
                 template_doc = frappe.get_doc("SMS Template", self.template)
                 body = template_doc.message_template or ""
                 if not body:
                     return ""
+                body = self._replace_positional_params(body, doc)
                 from jinja2 import Template
                 tmpl = Template(body)
                 context = {"doc": doc, "frappe": frappe} if doc else {"doc": None, "frappe": frappe}
@@ -143,6 +149,7 @@ class SMSNotification(Document):
         message_template = self.message_template
         if not message_template:
             return ""
+        message_template = self._replace_positional_params(message_template, doc)
         from jinja2 import Template
         tmpl = Template(message_template)
         context = {"doc": doc, "frappe": frappe} if doc else {"doc": None, "frappe": frappe}
@@ -150,6 +157,29 @@ class SMSNotification(Document):
             return tmpl.render(**context).strip()
         except Exception:
             return ""
+
+    def _replace_positional_params(self, text, doc):
+        """Replace {{1}}, {{2}}, ... with values from the ``fields`` child table.
+
+        Each row in ``self.fields`` maps a positional parameter to a DocType
+        field name.  ``{{1}}`` is replaced with the value of the first row's
+        field, ``{{2}}`` with the second, and so on.
+        """
+        if not self.fields or not doc:
+            return text
+        import re
+        params = []
+        for row in self.fields:
+            field_name = row.field_name
+            if hasattr(doc, "get_formatted"):
+                value = doc.get_formatted(field_name) or ""
+            else:
+                value = str(doc.get(field_name)) if doc.get(field_name) else ""
+            params.append(str(value))
+        def _replace(match):
+            idx = int(match.group(1)) - 1
+            return params[idx] if 0 <= idx < len(params) else match.group(0)
+        return re.sub(r"\{\{(\d+)\}\}", _replace, text)
 
     def _send_sms(self, phone, message, doc_data=None):
         """Enqueue SMS for sending."""

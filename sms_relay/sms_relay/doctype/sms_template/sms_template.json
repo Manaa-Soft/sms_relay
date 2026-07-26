@@ -60,7 +60,7 @@
    "reqd": 1,
    "options": "HTML",
    "in_list_view": 1,
-   "description": "Jinja2 template. Use {{ doc.field_name }} syntax."
+   "description": "Use {{ doc.field_name }} (Jinja2) or {{1}}, {{2}} (positional params from Notification fields table)."
   },
   {
    "fieldname": "sample_values",

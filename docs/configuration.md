@@ -109,16 +109,23 @@ Navigate to: **SMS Relay → SMS Template → New**
 | Event | Select | Yes | Event type. |
 | Language | Link: Language | No | Template language. |
 | Header | Small Text | No | Prepended to every message. |
-| Message Template | Code | Yes | Jinja2 body. |
+| Message Template | Code | Yes | Jinja2 body — supports `{{ doc.field }}` and `{{1}}`, `{{2}}` positional params. |
 | Footer | Small Text | No | Appended to every message. |
 
 ### Template Variables
 
-All templates have access to `{{ doc }}` (the full document) and `{{ frappe }}`:
+Two syntaxes are supported (can be mixed):
 
+**Jinja2 syntax** — access any document field:
 ```
 Dear {{ doc.customer }}, your invoice {{ doc.name }} for {{ frappe.utils.fmt_money(doc.grand_total) }} is due on {{ doc.due_date }}.
 ```
+
+**Positional syntax** — `{{1}}`, `{{2}}` etc. mapped via the SMS Notification **Fields** child table:
+```
+Hello {{1}}, your order {{2}} is ready. Total: {{3}}
+```
+In the notification's **Fields** table, row 1 maps to `customer_name`, row 2 to `name`, row 3 to `grand_total`.
 
 ### Custom Jinja Filters
 
@@ -148,9 +155,22 @@ Configure automatic SMS triggers on ERPNext documents.
 | Reference DocType | Link: DocType | Yes | Target DocType (Sales Invoice, etc.). |
 | DocType Event | Select | Yes | On Submit / On Save / On Validate / On Payment / On Cancel / On TRASH. |
 | Field Name | Data | Yes | Field containing phone number. |
-| Message Template | Code (Jinja) | Yes | Jinja2 message body. |
+| Message Template | Code (Jinja) | Yes | Jinja2 body — supports `{{1}}`, `{{2}}` positional params |
 | Condition | Code (Python) | No | `return True` to send. |
 | Event Frequency | Select | No | How often to trigger (for scheduled notifications). |
+| Fields | Table: SMS Message Field | No | Maps `{{1}}`, `{{2}}` placeholders to document fields. |
+
+### Positional Parameters (Fields Table)
+
+Add rows to the **Fields** child table to map `{{1}}`, `{{2}}`, etc. to document fields:
+
+| # | field_name | Resolves `{{N}}` to |
+|---|---|---|
+| 1 | customer_name | `{{1}}` = document's customer_name value |
+| 2 | name | `{{2}}` = document's name value |
+| 3 | grand_total | `{{3}}` = document's grand_total value |
+
+You can mix both syntaxes in the same template — Jinja2 `{{ doc.field }}` and positional `{{1}}` work together.
 
 ### Condition Examples
 

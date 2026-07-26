@@ -94,7 +94,7 @@ Represents a registered Android phone or custom HTTP SMS API endpoint.
 
 **Module:** SMS Relay | **Type:** Standard
 
-Jinja2 message templates with header/footer and character counting.
+Jinja2 message templates with header/footer, positional parameters, and character counting.
 
 ### Fields
 
@@ -105,10 +105,17 @@ Jinja2 message templates with header/footer and character counting.
 | enabled | Check | Enable/disable |
 | language | Link: Language | Template language |
 | header | Small Text | Prepended to message |
-| message_template | Code | Jinja2 body |
+| message_template | Code | Jinja2 body — supports `{{ doc.field }}` and `{{1}}`, `{{2}}` positional params |
 | footer | Small Text | Appended to message |
 | char_count | Int | Character count (read-only) |
 | sms_parts | Int | SMS segments (read-only) |
+
+### Message Syntax
+
+Two syntaxes are supported (can be mixed):
+
+1. **Jinja2**: `{{ doc.field_name }}` — rendered against the document at runtime.
+2. **Positional**: `{{1}}`, `{{2}}`, `{{N}}` — replaced from the **Fields** child table rows in the linked SMS Notification.
 
 ### Character Counting
 
@@ -259,7 +266,7 @@ Campaign manager for mass SMS messaging.
 
 **Module:** SMS Relay | **Type:** Standard
 
-Doc-triggered automated SMS rules with Jinja templates.
+Doc-triggered automated SMS rules with Jinja templates and positional parameters.
 
 ### Fields
 
@@ -271,14 +278,36 @@ Doc-triggered automated SMS rules with Jinja templates.
 | reference_doctype | Link: DocType | Target DocType |
 | doctype_event | Select | On Submit / On Save / On Validate / On Payment / On Cancel / On TRASH |
 | field_name | Data | Field containing phone number |
-| message_template | Code (Jinja) | Jinja2 message body |
+| message_template | Code (Jinja) | Jinja2 message body — supports `{{1}}`, `{{2}}` positional params |
 | condition | Code (Python) | `return True` to send |
 | event_frequency | Select | How often to trigger |
 | days_in_advance | Int | For scheduled: days before date field |
-| date_changed | Data | Date field to check |
+| date_changed | Select | Date/Datetime field to check (auto-populated from DocType) |
 | set_property_after_alert | Data | Field to update after sending |
 | property_value | Data | Value to set |
-| fields | Table: SMS Message Field | Dynamic field mappings |
+| fields | Table: SMS Message Field | Positional parameter mappings for `{{1}}`, `{{2}}` placeholders |
+
+### Positional Parameters
+
+The **Fields** child table maps `{{1}}`, `{{2}}`, etc. in the message template to document fields:
+
+| Row | `{{1}}` resolves to | `{{2}}` resolves to |
+|---|---|---|
+| 1 | Row 1's `field_name` value | — |
+| 2 | Row 1's `field_name` value | Row 2's `field_name` value |
+
+Example template:
+```
+Hello {{1}}, your order {{2}} is ready. Total: {{3}}
+```
+Fields table:
+| # | field_name |
+|---|---|
+| 1 | customer_name |
+| 2 | name |
+| 3 | grand_total |
+
+Result: `Hello John, your order SO-00123 is ready. Total: 1500.00`
 
 ---
 
@@ -368,10 +397,11 @@ Saved target groups for bulk messaging.
 
 **Module:** SMS Relay | **Type:** Child Table
 
-Dynamic field mapping for SMS Notification templates.
+Positional parameter mapping for SMS Notification templates.
+Each row maps a `{{N}}` placeholder to a document field name.
 
 ### Fields
 
 | Field | Type | Description |
 |---|---|---|
-| field_name | Data | DocType field name |
+| field_name | Data | DocType field name — value of `{{1}}`, `{{2}}`, etc. |
