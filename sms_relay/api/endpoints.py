@@ -10,14 +10,13 @@ from sms_relay.core.sms_utils import clean_phone, count_sms_parts, get_relay_set
 def test_connection():
     settings = get_relay_settings()
     gateway_url = (settings.get("gateway_url") or "").rstrip("/")
-    api_path = (settings.get("api_path") or "/api/mobile/v1/device").lstrip("/")
     username = settings.get("username") or ""
     password = settings.get_password("password") or ""
     timeout = cint(settings.get("timeout")) or 10
     if not gateway_url:
         return {"success": False, "error": "No gateway URL configured"}
     import requests
-    url = "{}/{}".format(gateway_url, api_path)
+    url = "{}/api/mobile/v1/device".format(gateway_url)
     try:
         resp = requests.get(
             url,
