@@ -6,7 +6,7 @@ frappe.ui.form.on('SMS Template', {
                 return;
             }
             frappe.call({
-                method: 'sms_relay.api.preview_template',
+                method: 'sms_relay.api.endpoints.preview_template',
                 args: {
                     template_name: frm.doc.name,
                     phone: frm.doc.preview_phone
@@ -32,7 +32,7 @@ frappe.ui.form.on('SMS Template', {
                 __('Send test SMS to {0}?', [frm.doc.preview_phone]),
                 function() {
                     frappe.call({
-                        method: 'sms_relay.api.send_sms_now',
+                        method: 'sms_relay.api.endpoints.send_sms_now',
                         args: {
                             recipient: frm.doc.preview_phone,
                             message: frm.doc.message_template,

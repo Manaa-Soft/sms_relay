@@ -39,7 +39,7 @@ frappe.ui.form.on("Sales Invoice", {
                     primary_action_label: __("Send"),
                     primary_action(values) {
                         frappe.call({
-                            method: "sms_relay.api.send_sms_now",
+                            method: "sms_relay.api.endpoints.send_sms_now",
                             args: {
                                 recipient: values.phone,
                                 message: values.message,
@@ -78,7 +78,7 @@ frappe.ui.form.on("Payment Entry", {
                 const msg = `Dear ${frm.doc.party_name || ""}, we have received payment of ${frappe.format(frm.doc.paid_amount, { fieldtype: "Currency", options: frm.doc.paid_from_account_currency })} for ${frm.doc.reference_name || "your account"}. Thank you!`;
 
                 frappe.call({
-                    method: "sms_relay.api.send_sms_now",
+                    method: "sms_relay.api.endpoints.send_sms_now",
                     args: {
                         recipient: phone,
                         message: msg,
@@ -130,7 +130,7 @@ frappe.pages["sms-gateway-dashboard"] = function () {
 
 function load_dashboard_data() {
     frappe.call({
-        method: "sms_relay.api.get_sms_stats",
+        method: "sms_relay.api.endpoints.get_sms_stats",
         callback(r) {
             if (r.message) {
                 const stats = r.message;
