@@ -13,10 +13,6 @@ app_include_js = [
 
 jinja = {
     "methods": "sms_relay.utils.jinja_methods.get_methods",
-    "fixtures": {
-        "sms_relay.utils.jinja_methods.get_methods": "methods",
-        "sms_relay.utils.jinja_methods.get_filters": "filters",
-    },
 }
 
 doc_events = {
@@ -78,8 +74,3 @@ fixtures = [
 
 after_install = "sms_relay.setup.after_install"
 before_tests = "sms_relay.setup.before_tests"
-
-has_permission = {
-    "SMS Device": "sms_relay.api.endpoints.has_device_permission",
-    "SMS Gateway Settings": "sms_relay.api.endpoints.has_settings_permission",
-}

@@ -191,7 +191,7 @@ def _get_customer_phone(customer):
         return clean_phone(phone)
     contact = frappe.db.get_value(
         "Dynamic Link",
-        {"link_doctype": "Customer", "link_name": parent},
+        {"link_doctype": "Customer", "link_name": customer},
         "parent",
     )
     if contact:
@@ -210,8 +210,9 @@ def _get_supplier_phone(supplier):
 
 def _render_template(template_name, context):
     template = frappe.get_doc("SMS Template", template_name)
-    if not template.template:
+    body = template.message_template or template.template or ""
+    if not body:
         return ""
     from jinja2 import Template
-    tmpl = Template(template.template)
+    tmpl = Template(body)
     return tmpl.render(**context)
