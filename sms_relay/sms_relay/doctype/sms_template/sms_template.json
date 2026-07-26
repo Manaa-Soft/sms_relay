@@ -42,8 +42,8 @@
     "fieldtype": "Code",
     "label": "Message Template",
     "reqd": 1,
-    "options": "Jinja",
-    "description": "Jinja template. Use {{ doc.field_name }} syntax. Available: doc, customer_name, grand_total, due_date, outstanding_amount, name, etc.",
+    "options": "HTML",
+    "description": "Jinja template. Use {{ doc.field_name }} syntax.",
     "indent": 1
   },
   {
