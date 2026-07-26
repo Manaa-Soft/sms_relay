@@ -6,50 +6,133 @@
  "engine": "InnoDB",
  "issingle": 0,
  "istable": 0,
- "editable_grid": 0,
+ "editable_grid": 1,
  "track_changes": 1,
- "autoname": "field:template_name",
+ "naming_rule": "Expression",
+ "autoname": "format:{template_name}-{language_code}",
+ "allow_rename": 1,
  "title_field": "template_name",
- "search_fields": "template_name,event",
- "sort_field": "event",
- "sort_order": "ASC",
+ "search_fields": "template_name,category,language",
+ "sort_field": "modified",
+ "sort_order": "DESC",
  "fields": [
   {
    "fieldname": "template_name",
    "fieldtype": "Data",
+   "label": "Template Label",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "actual_name",
+   "fieldtype": "Data",
    "label": "Template Name",
-   "reqd": 1,
-   "unique": 1,
-   "in_list_view": 1
+   "read_only": 1
   },
   {
-   "fieldname": "event",
-   "fieldtype": "Select",
-   "label": "Event",
-   "options": "Invoice Created\nPayment Received\nOverdue Reminder\nPayment Request\nDelivery Note\nCustom",
-   "reqd": 1,
-   "in_list_view": 1
+   "fieldname": "column_break_top",
+   "fieldtype": "Column Break"
   },
   {
-   "fieldname": "enabled",
-   "fieldtype": "Check",
-   "label": "Enabled",
-   "default": 1,
-   "in_list_view": 1
+   "fieldname": "status",
+   "fieldtype": "Data",
+   "label": "Status",
+   "default": "Pending",
+   "read_only": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "id_field",
+   "fieldtype": "Data",
+   "label": "ID",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_template",
+   "fieldtype": "Section Break",
+   "label": "Template"
   },
   {
    "fieldname": "message_template",
-    "fieldtype": "Code",
-    "label": "Message Template",
-    "reqd": 1,
-    "options": "HTML",
-    "description": "Jinja template. Use {{ doc.field_name }} syntax.",
-    "indent": 1
+   "fieldtype": "Code",
+   "label": "Template",
+   "reqd": 1,
+   "options": "HTML",
+   "in_list_view": 1,
+   "description": "Jinja2 template. Use {{ doc.field_name }} syntax."
+  },
+  {
+   "fieldname": "sample_values",
+   "fieldtype": "Small Text",
+   "label": "Sample Values"
+  },
+  {
+   "fieldname": "for_doctype",
+   "fieldtype": "Link",
+   "label": "For DocType",
+   "options": "DocType"
+  },
+  {
+   "fieldname": "field_names",
+   "fieldtype": "Small Text",
+   "label": "Field Names",
+   "description": "Field names to replace the value in templates"
+  },
+  {
+   "fieldname": "column_break_template",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "category",
+   "fieldtype": "Select",
+   "label": "Category",
+   "options": "\nTRANSACTIONAL\nMARKETING\nOTP\nUTILITY\nAUTHENTICATION",
+   "reqd": 1
+  },
+  {
+   "fieldname": "language",
+   "fieldtype": "Link",
+   "label": "Language",
+   "options": "Language",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "language_code",
+   "fieldtype": "Data",
+   "label": "Language Code",
+   "read_only": 1
+  },
+  {
+   "fieldname": "sms_account",
+   "fieldtype": "Link",
+   "label": "SMS Account",
+   "options": "SMS Device"
+  },
+  {
+   "fieldname": "section_header_footer",
+   "fieldtype": "Section Break",
+   "label": "Header & Footer"
+  },
+  {
+   "fieldname": "header",
+   "fieldtype": "Data",
+   "label": "Header"
+  },
+  {
+   "fieldname": "column_break_hf",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "footer",
+   "fieldtype": "Data",
+   "label": "Footer"
   },
   {
    "fieldname": "section_preview",
    "fieldtype": "Section Break",
-   "label": "Preview"
+   "label": "Preview & Testing"
   },
   {
    "fieldname": "preview_phone",
@@ -57,56 +140,35 @@
    "label": "Test Phone Number"
   },
   {
+   "fieldname": "column_break_preview",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "char_count",
+   "fieldtype": "Int",
+   "label": "Character Count",
+   "read_only": 1
+  },
+  {
+   "fieldname": "sms_parts",
+   "fieldtype": "Int",
+   "label": "SMS Parts",
+   "read_only": 1
+  },
+  {
    "fieldname": "section_variables",
    "fieldtype": "Section Break",
    "label": "Available Variables",
    "collapsible": 1
   },
-   {
-    "fieldname": "variables_description",
-    "fieldtype": "Small Text",
-    "label": "Variables",
-    "read_only": 1,
-    "description": "For Invoice: doc, customer_name, grand_total, due_date, outstanding_amount, name, currency\nFor Payment: doc, party_name, paid_amount, posting_date, name, reference_name\nFor Overdue: doc, customer_name, name, outstanding_amount, due_date, days_overdue"
-   },
-   {
-    "fieldname": "section_break_enhanced",
-    "fieldtype": "Section Break",
-    "label": "Template Details"
-   },
-   {
-    "fieldname": "language",
-    "fieldtype": "Link",
-    "label": "Language",
-    "options": "Language"
-   },
-   {
-    "fieldname": "header",
-    "fieldtype": "Small Text",
-    "label": "Header"
-   },
-   {
-    "fieldname": "column_break_enhanced",
-    "fieldtype": "Column Break"
-   },
-   {
-    "fieldname": "footer",
-    "fieldtype": "Small Text",
-    "label": "Footer"
-   },
-   {
-    "fieldname": "char_count",
-    "fieldtype": "Int",
-    "label": "Character Count",
-    "read_only": 1
-   },
-   {
-    "fieldname": "sms_parts",
-    "fieldtype": "Int",
-    "label": "SMS Parts",
-    "read_only": 1
-   }
-  ],
+  {
+   "fieldname": "variables_description",
+   "fieldtype": "Small Text",
+   "label": "Variables",
+   "read_only": 1,
+   "description": "For Invoice: doc, customer_name, grand_total, due_date, outstanding_amount, name, currency. For Payment: doc, party_name, paid_amount, posting_date. For Overdue: doc, customer_name, name, outstanding_amount, due_date, days_overdue"
+  }
+ ],
  "permissions": [
   {
    "role": "System Manager",
@@ -116,10 +178,36 @@
    "delete": 1,
    "email": 0,
    "print": 0,
-   "report": 0,
+   "report": 1,
+   "export": 1,
+   "import": 0,
+   "share": 1
+  },
+  {
+   "role": "SMS Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 0,
+   "email": 0,
+   "print": 0,
+   "report": 1,
    "export": 0,
    "import": 0,
    "share": 1
+  },
+  {
+   "role": "SMS Operator",
+   "read": 1,
+   "write": 1,
+   "create": 0,
+   "delete": 0,
+   "email": 0,
+   "print": 0,
+   "report": 0,
+   "export": 0,
+   "import": 0,
+   "share": 0
   },
   {
    "role": "All",
