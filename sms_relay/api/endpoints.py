@@ -1,30 +1,44 @@
 import csv
 import io
 import json
+import requests
 import frappe
 from frappe import _
 from frappe.utils import now, cint
 from sms_relay.core.sms_utils import clean_phone, count_sms_parts, get_relay_settings
 
-@frappe.whitelist()
-def test_connection():
-    settings = get_relay_settings()
-    gateway_url = (settings.get("gateway_url") or "").rstrip("/")
-    timeout = cint(settings.get("timeout")) or 10
-    if not gateway_url:
-        return {"success": False, "error": "No gateway URL configured"}
-    import requests
-    url = "{}/api/mobile/v1/device".format(gateway_url)
+
+def _get_gateway_auth(settings, device=None):
+    """Resolve auth for the Android SMS Gateway.
+
+    Priority:
+    1. Gateway Settings ``private_token`` → Bearer token (server-level)
+    2. Device ``username`` / ``password`` → Basic Auth (device-level)
+    """
     headers = {}
     auth = None
     private_token = settings.get_password("private_token")
     if private_token:
         headers["Authorization"] = "Bearer {}".format(private_token)
-    else:
-        username = settings.get("username") or ""
-        password = settings.get_password("password") or ""
+        return headers, auth
+    if device:
+        username = device.username or ""
+        password = device.get_password("password") or ""
         if username:
             auth = requests.auth.HTTPBasicAuth(username, password)
+    return headers, auth
+
+
+@frappe.whitelist()
+def test_connection(device_name=None):
+    settings = get_relay_settings()
+    timeout = cint(settings.get("timeout")) or 10
+    device = frappe.get_doc("SMS Device", device_name) if device_name else None
+    gateway_url = (device.server_url if device else settings.get("gateway_url") or "").rstrip("/")
+    if not gateway_url:
+        return {"success": False, "error": "No gateway URL configured"}
+    headers, auth = _get_gateway_auth(settings, device)
+    url = "{}/api/mobile/v1/device".format(gateway_url)
     try:
         resp = requests.get(url, headers=headers, auth=auth, timeout=timeout)
         if resp.status_code == 200:
@@ -34,6 +48,7 @@ def test_connection():
     except requests.exceptions.RequestException as e:
         return {"success": False, "error": str(e)[:200]}
 
+
 @frappe.whitelist()
 def connect_device(device_name=None):
     if not device_name:
@@ -42,18 +57,8 @@ def connect_device(device_name=None):
     base_url = (device.server_url or "").rstrip("/")
     if not base_url:
         return {"success": False, "error": "No server URL configured"}
-    import requests
     settings = get_relay_settings()
-    headers = {}
-    auth = None
-    private_token = settings.get_password("private_token")
-    if private_token:
-        headers["Authorization"] = "Bearer {}".format(private_token)
-    else:
-        username = device.username or ""
-        password = device.get_password("password") or ""
-        if username:
-            auth = requests.auth.HTTPBasicAuth(username, password)
+    headers, auth = _get_gateway_auth(settings, device)
     updates = {"is_online": 0, "last_heartbeat": now()}
     result = {"success": False}
 
@@ -108,6 +113,7 @@ def connect_device(device_name=None):
     result["updates"] = updates
     return result
 
+
 @frappe.whitelist()
 def send_sms_now(recipient=None, message=None, template=None, device=None, sim=None):
     if not recipient:
@@ -131,6 +137,7 @@ def send_sms_now(recipient=None, message=None, template=None, device=None, sim=N
     send_sms(phone_list, message, sender="")
     return {"status": "sent", "recipients": phone_list, "message_length": len(message)}
 
+
 @frappe.whitelist()
 def send_bulk_sms(recipients_csv=None, recipients_json=None, message=None, template=None, account=None, scheduled_at=None):
     if not recipients_csv and not recipients_json:
@@ -147,6 +154,7 @@ def send_bulk_sms(recipients_csv=None, recipients_json=None, message=None, templ
         scheduled_at=scheduled_at,
     )
     return {"status": "created", "bulk_job": bulk.name, "total_recipients": bulk.total_recipients}
+
 
 @frappe.whitelist()
 def get_device_health():
@@ -190,6 +198,7 @@ def get_device_health():
         })
     return result
 
+
 @frappe.whitelist()
 def preview_template(template_name=None, doc_type=None, doc_name=None, message_text=None):
     if message_text:
@@ -211,6 +220,7 @@ def preview_template(template_name=None, doc_type=None, doc_name=None, message_t
         "sms_info": count_sms_parts(rendered),
     }
 
+
 @frappe.whitelist()
 def retry_sms(queue_name=None):
     if not queue_name:
@@ -222,6 +232,7 @@ def retry_sms(queue_name=None):
     queue.save(ignore_permissions=True)
     frappe.db.commit()
     return {"status": "requeued", "name": queue.name}
+
 
 @frappe.whitelist()
 def get_sms_stats():
@@ -236,6 +247,7 @@ def get_sms_stats():
         "opted_out_count": frappe.db.count("SMS Opt Out", filters={"opted_out": 1}),
     }
     return stats
+
 
 @frappe.whitelist()
 def get_notification_preview(notification_name=None, doc_type=None, doc_name=None):

@@ -151,6 +151,12 @@ def _send_android_gateway(device, phone, message, sender, queue_doc=None):
         password = device.get_password("password") or ""
         if username:
             auth = requests.auth.HTTPBasicAuth(username, password)
+        else:
+            frappe.log_error(
+                title="SMS Relay: No auth credentials",
+                message="Device '{}' has no username/password set and no private_token in Gateway Settings. "
+                        "SMS to {} will fail with 401.".format(device.name, phone),
+            )
     try:
         resp = requests.post(url, json=payload, headers=headers, auth=auth, timeout=timeout)
         if resp.status_code in (200, 201, 202):
