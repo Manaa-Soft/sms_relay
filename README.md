@@ -9,7 +9,7 @@ ERPNext (Invoice/Payment/Delivery/PO)
         │
   hooks.py doc_events
         │
-  notification_handler.py (Jinja render + condition check)
+  utils/notification_handler.py (Jinja render + condition check)
         │
   SMS Queue (priority tiers: High/Normal/Low)
         │
@@ -25,17 +25,17 @@ ERPNext (Invoice/Payment/Delivery/PO)
 - **Multi-device routing** — Round Robin, Priority, or Random selection with failover
 - **Bulk messaging** — CSV upload, recipient lists, batch processing with progress tracking
 - **Document notifications** — Jinja templates triggered on Sales Invoice, Payment Request, Delivery Note, Purchase Order, Employee Checkin
-- **Async queue with outbox** — Exponential backoff retry, priority tiers (High for OTP/Payment, Low for marketing)
+- **Async queue** — Priority tiers (High for OTP/Payment, Low for marketing)
 - **SMS Opt Out** — Automatic STOP blacklist with cache invalidation
 - **Delivery tracking** — Webhook delivery receipts with HMAC-SHA256 verification
-- **Device health monitoring** — Battery, signal strength, SIM slot, hourly/daily quotas
+- **Device health monitoring** — Battery, signal strength, SIM info, hourly/daily quotas
 - **Character counter** — GSM-7 (160 chars) vs Unicode (70 chars) detection, multi-part SMS calculation
-- **REST API** — Send, bulk, health, preview, retry, stats, notification preview
+- **REST API** — Send, bulk, health, preview, retry, stats, notification preview, test connection, connect device
 - **Dashboard** — Real-time device health, daily stats, auto-refresh
 
 ## Requirements
 
-- Frappe Framework v15+
+- Frappe Framework v15+ (tested on v16)
 - ERPNext v15+ (for Sales Invoice, Payment Request, Delivery Note, Purchase Order)
 - [Android SMS Gateway](https://github.com/AuroraLS/android-sms-gateway) server running in Docker
 - At least one Android phone connected to the gateway
@@ -61,11 +61,14 @@ bench restart
 | Field | Description |
 |---|---|
 | Enabled | Master on/off toggle |
-| Sender Name | Default sender label |
+| Server URL | Gateway server URL (e.g. `http://192.168.1.15:8085`) |
+| API Path | Endpoint path (default: `/api/3rdparty/v1/message`) |
+| Timeout | HTTP timeout in seconds |
 | Routing Strategy | Round Robin / Priority / Random |
 | Enable Failover | Use next device if primary fails |
 | Global Rate Limit | Max SMS per minute across all devices |
-| Webhook Secret | HMAC-SHA256 secret for delivery receipts |
+| Check Opt-Out | Skip opted-out numbers |
+| Enable Incoming Webhooks | Receive delivery receipts |
 
 ### 2. Add SMS Devices
 
@@ -73,14 +76,17 @@ bench restart
 
 | Field | Description |
 |---|---|
-| Device Name | Human-readable label |
-| Gateway URL | SMS Gateway server URL |
-| Gateway Type | Android SMS Gateway / Custom HTTP API |
-| API Key | Per-device authentication |
-| SIM Slot | 1 or 2 |
+| Device Name | Human-readable label (e.g. "Office Phone") |
+| Device ID | Unique ID from the phone app |
+| Mode | Android SMS Gateway / Custom HTTP API |
+| Server URL | Gateway server URL for this device |
+| Username / Password | Per-device authentication |
+| SIM Number | SIM slot (1 or 2) |
 | Priority | Lower = higher priority |
 | Hourly/Daily Quota | Rate limits |
 | Active | Enable/disable |
+
+Click **Connect Device** to auto-fetch device info from the gateway.
 
 ### 3. Create SMS Templates (Optional)
 
@@ -97,9 +103,10 @@ Dear {{ doc.customer }}, your invoice {{ doc.name }} for {{ frappe.utils.fmt_mon
 **SMS Relay → SMS Notification → New**
 
 Configure document-triggered SMS:
+- **Notification Type**: DocType notification
 - **Reference DocType**: Sales Invoice, Payment Request, etc.
-- **Event**: On Submit / On Save / On Validate
-- **Phone Field**: Field name containing phone number
+- **DocType Event**: On Submit / On Save / On Validate
+- **Field Name**: Field containing phone number
 - **Message Template**: Jinja2 code
 - **Condition**: Python expression (e.g., `return doc.grand_total > 1000`)
 
@@ -136,9 +143,9 @@ frappe.call({
 | DocType | Enhancements |
 |---|---|
 | SMS Gateway Settings | Routing strategy, rate limiting, webhook secret, failover |
-| SMS Device | SIM slot, battery, signal, hourly/daily quotas, API key |
+| SMS Device | Server URL, username/password, SIM info, device model, carrier, battery, quotas |
 | SMS Template | Language, header/footer, character counter |
-| SMS Log | Delivery status, delivery timestamp, channel |
+| SMS Log | Delivery status, delivery timestamp, channel, retry count |
 | SMS Queue | Priority tiers, target SIM, retry counts |
 
 ## API Reference
@@ -178,6 +185,8 @@ frappe.call({
 
 | Method | Description |
 |---|---|
+| `sms_relay.api.endpoints.test_connection` | Test gateway connectivity |
+| `sms_relay.api.endpoints.connect_device` | Fetch device info from gateway |
 | `sms_relay.api.endpoints.get_device_health` | Device health, battery, signal, quota usage |
 | `sms_relay.api.endpoints.preview_template` | Render template with real document data |
 | `sms_relay.api.endpoints.retry_sms` | Re-queue a failed SMS |
@@ -225,7 +234,8 @@ sms_relay/sms_relay/
 │   └── endpoints.py            # REST API endpoints
 ├── utils/
 │   ├── jinja_methods.py        # Custom Jinja filters
-│   └── contact_manager.py      # Auto-link SMS to Contact/Lead
+│   ├── contact_manager.py      # Auto-link SMS to Contact/Lead
+│   └── notification_handler.py # Doc-event dispatch bridge
 ├── doctype/                    # 14 DocTypes (9 new + 5 enhanced)
 ├── public/js/
 │   ├── sms_dashboard.js        # Real-time monitoring

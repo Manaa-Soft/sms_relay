@@ -8,30 +8,28 @@ Global configuration for the entire SMS relay system.
 
 ### Fields
 
-#### General
+#### Gateway
 | Field | Type | Description |
 |---|---|---|
 | enabled | Check | Master on/off toggle |
-| sender_name | Data | Default sender label |
-| gateway_url | Data | Global gateway server URL |
-| api_path | Data | API endpoint path |
-| username | Data | Gateway auth username |
-| password | Password | Gateway auth password |
-| private_token | Password | Bearer token auth (alternative) |
+| gateway_url | Data | Gateway server URL (e.g. `http://192.168.1.15:8085`) |
+| api_path | Data | API endpoint path (default: `/api/3rdparty/v1/message`) |
 | timeout | Int | HTTP timeout seconds (default: 15) |
+| max_retry_count | Int | Max retry attempts (default: 3) |
 
-#### Routing & Failover
+#### Routing & Rate Limiting
 | Field | Type | Description |
 |---|---|---|
 | routing_strategy | Select | Round Robin / Priority / Random |
 | failover_enabled | Check | Use next device if primary fails |
 | global_rate_limit | Int | Max SMS per minute across all devices (default: 60) |
+| check_opt_out | Check | Skip opted-out numbers |
 
-#### Webhook Security
+#### Webhook (Incoming SMS)
 | Field | Type | Description |
 |---|---|---|
+| webhook_enabled | Check | Enable incoming webhooks |
 | webhook_secret | Password | HMAC-SHA256 verification secret |
-| webhook_signature_header | Data | Header name (default: X-Webhook-Signature) |
 
 ---
 
@@ -43,29 +41,51 @@ Represents a registered Android phone or custom HTTP SMS API endpoint.
 
 ### Fields
 
-| Field | Type | In List View | Description |
-|---|---|---|---|
-| device_name | Data | Yes | Human-readable label |
-| gateway_url | Data | Yes | Gateway server URL |
-| gateway_type | Select | Yes | Android SMS Gateway / Custom HTTP API |
-| api_key | Password | — | Per-device auth token |
-| is_active | Check | Yes | Enable/disable device |
-| priority | Int | Yes | Lower = higher priority |
-| sim_slot | Select | — | SIM slot 1 or 2 |
-| battery_level | Int | — | Battery % (read-only) |
-| signal_strength | Data | — | Signal info (read-only) |
-| hourly_quota | Int | — | Max SMS per hour (default: 500) |
-| daily_quota | Int | — | Max SMS per day (default: 5000) |
-| webhook_callback_url | Data | — | Delivery report callback URL |
+#### Connection
+| Field | Type | Description |
+|---|---|---|
+| device_name | Data | Human-readable label |
+| device_id | Data | Unique ID from phone app |
+| mode | Select | Android SMS Gateway / Custom HTTP API |
+| server_url | Data | Gateway server URL for this device |
+| username | Data | Gateway auth username |
+| password | Password | Gateway auth password |
+| sim_number | Select | SIM slot 1 or 2 |
+| priority | Int | Lower = higher priority |
+| is_active | Check | Enable/disable device |
+
+#### Status (Read-only)
+| Field | Type | Description |
+|---|---|---|
+| is_online | Check | Whether device is reachable |
+| last_heartbeat | Datetime | Last successful communication |
+| device_model | Data | Phone model |
+| app_version | Data | SMS Gateway app version |
+| battery_level | Int | Battery percentage |
+| signal_strength | Data | Network signal info |
+| carrier_name | Data | Mobile carrier |
+| sim_phone_number | Data | SIM phone number |
+
+#### Quotas
+| Field | Type | Description |
+|---|---|---|
+| daily_quota | Int | Max SMS per day (default: 5000) |
+| sent_today | Int | Current day count (read-only) |
+| hourly_quota | Int | Max SMS per hour (default: 500) |
+
+#### Additional
+| Field | Type | Description |
+|---|---|---|
+| country_code | Data | Default country code for phone normalization |
+| notes | Small Text | Internal notes |
 
 ### Device Selection Algorithm
 
-1. Get all Active devices sorted by priority ASC
+1. Get all Active devices (`is_active = 1`) sorted by priority ASC
 2. Check daily quota not exhausted
-3. Check per-minute rate limit not exceeded
-4. Apply routing strategy (Round Robin / Priority / Random)
-5. If failover enabled, try next device on failure
-6. If no device available → SMS stays in queue
+3. Apply routing strategy (Round Robin / Priority / Random)
+4. If failover enabled, try next device on failure
+5. If no device available → SMS stays in queue
 
 ---
 
@@ -89,14 +109,6 @@ Jinja2 message templates with header/footer and character counting.
 | char_count | Int | Character count (read-only) |
 | sms_parts | Int | SMS segments (read-only) |
 
-### Template Variables
-
-Use `{{ doc }}` to access the full document object:
-
-```
-Dear {{ doc.customer }}, your invoice {{ doc.name }} for {{ frappe.utils.fmt_money(doc.grand_total) }} is due on {{ doc.due_date }}.
-```
-
 ### Character Counting
 
 - **GSM-7**: 160 chars per SMS, 153 for multi-part
@@ -113,16 +125,26 @@ Immutable audit trail of all SMS activity.
 
 ### Fields
 
-| Field | Type | In List View | Description |
-|---|---|---|---|
-| phone_number | Data | Yes | Recipient phone |
-| message | Long Text | — | SMS body |
-| status | Select | Yes | Queued/Sent/Delivered/Failed/Cancelled |
-| delivery_status | Select | Yes | Pending/Sent/Delivered/Failed/Expired |
-| delivery_at | Datetime | — | Delivery report timestamp |
-| device_name | Link: SMS Device | Yes | Sending device |
-| gateway_message_id | Data | Yes | Gateway-assigned ID |
-| channel | Data | — | SMS (default) |
+| Field | Type | Description |
+|---|---|---|
+| phone | Data | Recipient phone |
+| recipient_name | Data | Recipient name |
+| message | Long Text | SMS body |
+| status | Select | Queued/Sent/Delivered/Failed/Cancelled |
+| delivery_status | Select | Pending/Sent/Delivered/Failed/Expired |
+| delivery_at | Datetime | Delivery report timestamp |
+| channel | Data | SMS (default) |
+| reference_doctype | Data | Source DocType (if from notification) |
+| reference_name | Data | Source document name |
+| gateway_message_id | Data | Gateway-assigned ID |
+| device | Link: SMS Device | Sending device |
+| sim_number | Data | SIM slot used |
+| queued_at | Datetime | When queued |
+| sent_at | Datetime | When sent |
+| delivered_at | Datetime | When delivered |
+| retry_count | Int | Number of retries |
+| error_message | Small Text | Error (if failed) |
+| webhook_payload | Long Text | Raw webhook data |
 
 ---
 
@@ -134,17 +156,25 @@ Async message queue with priority tiers and retry support.
 
 ### Fields
 
-| Field | Type | In List View | Description |
-|---|---|---|---|
-| phone_number | Data | Yes | Recipient phone |
-| message | Long Text | Yes | SMS body |
-| status | Select | Yes | Queued/Sending/Sent/Failed/Received/Cancelled |
-| priority_tier | Select | Yes | High/Normal/Low |
-| target_sim | Select | — | Auto/1/2 |
-| device_name | Link: SMS Device | — | Assigned device |
-| max_retries | Int | — | Max retry attempts (default: 3) |
-| retry_count | Int | — | Current retry count |
-| next_retry_at | Datetime | — | Scheduled retry time |
+| Field | Type | Description |
+|---|---|---|
+| status | Select | Queued/Sending/Sent/Failed/Received/Cancelled |
+| priority | Int | Sort order (lower = higher priority) |
+| priority_tier | Select | High/Normal/Low |
+| recipient | Data | Recipient phone |
+| recipient_name | Data | Recipient name |
+| message | Long Text | SMS body |
+| reference_doctype | Data | Source DocType |
+| reference_name | Data | Source document name |
+| template | Link: SMS Template | Source template |
+| device | Link: SMS Device | Assigned device |
+| sim_number | Data | Target SIM slot |
+| gateway_message_id | Data | Gateway-assigned ID |
+| retry_count | Int | Current retry count |
+| max_retries | Int | Max retries (default: 3) |
+| error_log | Small Text | Error details |
+| scheduled_at | Datetime | Deferred send time |
+| sent_at | Datetime | When sent |
 
 ### Priority Tiers
 
@@ -181,10 +211,6 @@ Blacklist registry for unsubscribed phone numbers.
 | opted_out_date | Datetime | When opted out |
 | restored_by | Link: User | Who restored (read-only) |
 | restored_date | Datetime | When restored (read-only) |
-
-### Usage
-
-When a number is opted out, `sms_engine` checks this table before every send. Opted-out numbers are silently skipped. The opt-out list is cached for 600 seconds.
 
 ---
 
@@ -238,13 +264,17 @@ Doc-triggered automated SMS rules with Jinja templates.
 
 | Field | Type | Description |
 |---|---|---|
-| enabled | Check | Enable/disable |
+| notification_name | Data | Unique name |
+| notification_type | Select | DocType notification / SMS Alert / WhatsApp Message |
+| disabled | Check | Disable this rule |
 | reference_doctype | Link: DocType | Target DocType |
-| event | Select | On Submit / On Save / On Validate |
-| account | Link: SMS Device | Device to use |
-| phone_field | Data | Field name containing phone number |
-| message_template | Code (Jinja) | Message template |
-| condition | Code (Python) | "Return True to send" |
+| doctype_event | Select | On Submit / On Save / On Validate / On Payment / On Cancel / On TRASH |
+| field_name | Data | Field containing phone number |
+| message_template | Code (Jinja) | Jinja2 message body |
+| condition | Code (Python) | `return True` to send |
+| event_frequency | Select | How often to trigger |
+| days_in_advance | Int | For scheduled: days before date field |
+| date_changed | Data | Date field to check |
 | set_property_after_alert | Data | Field to update after sending |
 | property_value | Data | Value to set |
 | fields | Table: SMS Message Field | Dynamic field mappings |

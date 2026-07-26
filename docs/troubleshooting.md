@@ -10,7 +10,7 @@ frappe.get_single("SMS Gateway Settings").enabled
 
 ### Check device status
 ```python
-frappe.get_all("SMS Device", fields=["name", "device_name", "is_active", "battery_level", "signal_strength", "sent_today", "daily_quota"])
+frappe.get_all("SMS Device", fields=["name", "device_name", "is_active", "is_online", "battery_level", "signal_strength", "sent_today", "daily_quota"])
 ```
 
 ### Check queue status
@@ -25,7 +25,7 @@ frappe.get_all("SMS Outbox", filters={"status": ["!=", "Sent"]}, limit=10)
 
 ### Check recent SMS logs
 ```python
-frappe.get_all("SMS Log", order_by="creation desc", limit=10, fields=["name", "phone_number", "status", "delivery_status", "error"])
+frappe.get_all("SMS Log", order_by="creation desc", limit=10, fields=["name", "phone", "status", "delivery_status", "error_message"])
 ```
 
 ### Check opt-out list
@@ -35,7 +35,7 @@ frappe.get_all("SMS Opt Out", filters={"opted_out": 1}, limit=10)
 
 ### Check notifications
 ```python
-frappe.get_all("SMS Notification", filters={"enabled": 1}, fields=["name", "reference_doctype", "event"])
+frappe.get_all("SMS Notification", filters={"disabled": 0}, fields=["name", "reference_doctype", "doctype_event"])
 ```
 
 ### Check bulk campaigns
@@ -52,14 +52,14 @@ frappe.get_all("SMS Bulk Message", filters={"status": ["in", ["Processing", "Dra
 **Causes:**
 1. Phone app not connected to server
 2. Network connectivity issue
-3. Gateway URL incorrect
+3. Server URL incorrect on the device
 4. Health check not reaching Frappe
 
 **Fixes:**
 1. Open SMS Gateway app on phone → verify "Connected" status
-2. Check phone can reach the server
-3. Verify Gateway URL in SMS Device record
-4. Check webhook config includes `system:ping`
+2. Check phone can reach the server (same LAN or correct port forwarding)
+3. Verify Server URL in SMS Device record matches the gateway server
+4. Click **Connect Device** to refresh device info
 5. Restart the Android app
 6. Check Docker logs: `docker logs sms-gateway`
 
@@ -69,18 +69,16 @@ frappe.get_all("SMS Bulk Message", filters={"status": ["in", ["Processing", "Dra
 
 **Causes:**
 1. SMS Gateway Settings → Enabled is off
-2. No active/online devices
+2. No active/online devices (`is_active = 1`)
 3. All devices at quota limit
-4. All devices throttled
-5. Scheduler not running
+4. Scheduler not running
 
 **Fixes:**
 1. Check `SMS Gateway Settings.enabled` is 1
-2. Check at least one device is Active
+2. Check at least one device has `is_active = 1`
 3. Check `sent_today < daily_quota` on devices
-4. Wait 60 seconds for throttle window to reset
-5. Check scheduler: `bench doctor`
-6. Manually trigger: `bench execute sms_relay.tasks.process_sms_queue`
+4. Check scheduler: `bench doctor`
+5. Manually trigger: `bench execute sms_relay.tasks.process_sms_queue`
 
 ---
 
@@ -90,11 +88,11 @@ frappe.get_all("SMS Bulk Message", filters={"status": ["in", ["Processing", "Dra
 
 | Error | Cause | Fix |
 |---|---|---|
-| `ConnectionError` | Cannot reach gateway | Check gateway URL, network, Docker |
-| `HTTPError 401` | Auth failed | Check API key |
+| `ConnectionError` | Cannot reach gateway | Check server URL, network, Docker |
+| `HTTPError 401` | Auth failed | Check username/password on SMS Device |
 | `HTTPError 403` | Forbidden | Check credentials |
-| `HTTPError 404` | Wrong API path | Check API path |
-| `Timeout` | Server too slow | Check network, increase timeout |
+| `HTTPError 404` | Wrong API path | Check API Path in SMS Gateway Settings |
+| `Timeout` | Server too slow | Check network, increase Timeout setting |
 | `No device available` | All devices offline/quota | Check device status |
 
 **Fix:** Click "Retry" on SMS Queue, or wait for daily retry job.
@@ -112,7 +110,7 @@ curl -X POST http://YOUR-FRAPPE-SITE/api/method/sms_relay.api.webhook_receiver.i
   -H "Content-Type: application/json" \
   -d '{"event": "system:ping", "deviceId": "test"}'
 ```
-4. Check Webhook Secret matches between Frappe and server config
+4. Check Webhook HMAC Secret matches between Frappe and server config
 5. Check firewall allows incoming connections
 
 ---
@@ -120,16 +118,16 @@ curl -X POST http://YOUR-FRAPPE-SITE/api/method/sms_relay.api.webhook_receiver.i
 ### Notifications not triggering
 
 **Causes:**
-1. SMS Notification not enabled
+1. SMS Notification is disabled
 2. Wrong event type (On Submit vs On Save)
 3. Phone field doesn't contain phone number
 4. Condition returning False
 5. Jinja template error
 
 **Fixes:**
-1. Check SMS Notification is enabled
-2. Verify event matches your workflow (submit vs save)
-3. Verify phone_field name matches a field on the DocType
+1. Check SMS Notification `disabled` is unchecked
+2. Verify `doctype_event` matches your workflow (submit vs save)
+3. Verify `field_name` matches a field on the DocType
 4. Test condition: `return True` to always send
 5. Use "Test Notification" button in the form
 
@@ -183,9 +181,8 @@ curl -X POST http://YOUR-FRAPPE-SITE/api/method/sms_relay.api.webhook_receiver.i
 
 ## Performance Tips
 
-1. **Keep batch_size reasonable** — 10 per minute is safe for most gateways
-2. **Monitor quotas** — If daily_quota is too low, SMS queues up
-3. **Multiple devices** — Add devices for failover and load distribution
-4. **Priority tiers** — Use High for OTP/payment, Low for marketing
-5. **Clean logs** — Default 90-day retention keeps tables manageable
-6. **Use condition filters** — Don't send SMS for every document, use conditions
+1. **Monitor quotas** — If daily_quota is too low, SMS queues up
+2. **Multiple devices** — Add devices for failover and load distribution
+3. **Priority tiers** — Use High for OTP/payment, Low for marketing
+4. **Clean logs** — Default 90-day retention keeps tables manageable
+5. **Use condition filters** — Don't send SMS for every document, use conditions

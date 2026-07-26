@@ -24,22 +24,23 @@ sms_relay/sms_relay/
 │   └── endpoints.py            # REST APIs for external gateway sync
 ├── utils/
 │   ├── jinja_methods.py        # Custom Jinja filters (money, date, clean phone)
-│   └── contact_manager.py      # Auto-linking inbound SMS to Leads/Contacts/Customers
+│   ├── contact_manager.py      # Auto-linking inbound SMS to Leads/Contacts/Customers
+│   └── notification_handler.py # Doc-event dispatch bridge
 ├── doctype/
-│   ├── sms_device/             # Enhanced: SIM slot, battery, signal, quotas
-│   ├── sms_gateway_settings/   # Enhanced: routing, rate limit, webhook secret
-│   ├── sms_log/                # Enhanced: delivery_status, delivery_at
-│   ├── sms_queue/              # Enhanced: priority_tier, target_sim
-│   ├── sms_template/           # Enhanced: language, header/footer, char counter
-│   ├── sms_opt_out/            # NEW: STOP blacklist
-│   ├── sms_bulk_message/       # NEW: Campaign manager
-│   ├── sms_bulk_recipient/     # NEW: Child table
-│   ├── sms_notification/       # NEW: Doc-triggered rules
-│   ├── sms_notification_log/   # NEW: Audit log
-│   ├── sms_outbox/             # NEW: Async retry outbox
-│   ├── sms_recipient_list/     # NEW: Saved groups
-│   ├── sms_recipient/          # NEW: Child table
-│   └── sms_message_field/      # NEW: Dynamic field mapping
+│   ├── sms_device/             # Connection, status, quotas, Connect Device button
+│   ├── sms_gateway_settings/   # Routing, rate limit, webhook secret, failover
+│   ├── sms_log/                # Delivery status, timing, error details
+│   ├── sms_queue/              # Priority tiers, target SIM, retry counts
+│   ├── sms_template/           # Language, header/footer, char counter
+│   ├── sms_opt_out/            # STOP blacklist
+│   ├── sms_bulk_message/       # Campaign manager
+│   ├── sms_bulk_recipient/     # Child table
+│   ├── sms_notification/       # Doc-triggered rules
+│   ├── sms_notification_log/   # Audit log
+│   ├── sms_outbox/             # Async retry outbox
+│   ├── sms_recipient_list/     # Saved groups
+│   ├── sms_recipient/          # Child table
+│   └── sms_message_field/      # Dynamic field mapping
 ├── public/js/
 │   ├── sms_dashboard.js        # Real-time device health & stats
 │   ├── bulk_message.js         # CSV upload, progress bar, char counter
@@ -60,8 +61,8 @@ sms_relay/sms_relay/
 5. If valid: create SMS Queue entry (priority: High if payment/OTP, Normal otherwise)
 6. Every minute, `process_sms_queue()` picks up queued entries
 7. `sms_engine._select_device()` picks best device (routing strategy + quota + throttle)
-8. `_send_to_device()` makes HTTP POST to gateway
-9. Phone sends SMS via SIM card
+8. `_send_to_device()` makes HTTP POST to gateway with Basic Auth (`username:password`)
+9. Gateway returns 202 Accepted → Phone app picks up message and sends via SIM
 10. `sms_log` updated with status and `gateway_message_id`
 
 ### Bulk SMS
@@ -94,7 +95,7 @@ sms_relay/sms_relay/
 | `_select_device()` | Round Robin / Priority / Random routing |
 | `_check_quota()` | Daily quota check per device |
 | `_throttle_check()` | Per-device per-minute rate limit |
-| `_send_to_device()` | HTTP POST to gateway (Android or Custom) |
+| `_send_to_device()` | HTTP POST to gateway (reads api_path/timeout from settings, accepts 202) |
 | `_enqueue_sms()` | Create SMS Queue entry |
 | `_log_sms()` | Create SMS Log entry |
 | `_render_template()` | Jinja2 template rendering |

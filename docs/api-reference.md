@@ -70,19 +70,58 @@ Create a bulk SMS campaign from CSV.
 }
 ```
 
-**Example:**
-```javascript
-frappe.call({
-    method: "sms_relay.api.endpoints.send_bulk_sms",
-    args: {
-        recipients_csv: "phone,name\n+1234567890,John\n+0987654321,Jane",
-        message: "Payment reminder: you have an outstanding balance."
-    },
-    callback: function(r) {
-        frappe.show_alert("Bulk job created: " + r.message.bulk_job);
-    }
-});
+---
+
+## test_connection
+
+Test connectivity to the SMS gateway server.
+
+**Path:** `sms_relay.api.endpoints.test_connection`
+
+**Parameters:** None
+
+**Returns:**
+```json
+{
+    "success": true,
+    "status_code": 200,
+    "response": "..."
+}
 ```
+
+---
+
+## connect_device
+
+Fetch device info from the SMS Gateway server and auto-fill SMS Device fields.
+
+**Path:** `sms_relay.api.endpoints.connect_device`
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|---|---|---|---|
+| server_url | str | Yes | Gateway server URL (e.g. `http://192.168.1.15:8085`) |
+| username | str | Yes | Gateway auth username |
+| password | str | Yes | Gateway auth password |
+
+**Returns:**
+```json
+{
+    "success": true,
+    "device_id": "phone-001",
+    "device_model": "Samsung Galaxy S21",
+    "carrier_name": "Vodafone",
+    "sim_phone_number": "+212600000000",
+    "app_version": "1.67.0",
+    "battery_level": 85,
+    "is_online": true
+}
+```
+
+Queries:
+- `GET {server_url}/api/mobile/v1/device` — device details
+- `GET {server_url}/health` — online status
 
 ---
 
@@ -103,8 +142,10 @@ Returns health status of all enabled SMS devices.
         "is_active": true,
         "battery_level": 85,
         "signal_strength": "-75 dBm",
-        "sim_slot": "1",
-        "gateway_type": "Android SMS Gateway",
+        "sim_number": "1",
+        "carrier_name": "Vodafone",
+        "device_model": "Samsung Galaxy S21",
+        "app_version": "1.67.0",
         "sent_today": 45,
         "daily_quota": 5000,
         "sent_this_hour": 3,
@@ -289,18 +330,6 @@ Public endpoint for receiving delivery receipts and incoming SMS.
 **Path:** `sms_relay.core.sms_engine.send_sms_override`
 
 Overrides `frappe.core.doctype.sms_settings.sms_settings.send_sms`. All outgoing SMS is routed through the relay engine.
-
----
-
-## Document Event Hooks
-
-| Document | Event | Handler |
-|---|---|---|
-| Sales Invoice | on_submit | sms_relay.core.notification_handler.on_doc_event |
-| Payment Request | on_submit | sms_relay.core.notification_handler.on_doc_event |
-| Delivery Note | on_submit | sms_relay.core.notification_handler.on_doc_event |
-| Purchase Order | on_submit | sms_relay.core.notification_handler.on_doc_event |
-| Employee Checkin | on_insert | sms_relay.core.notification_handler.on_doc_event |
 
 ## Scheduled Jobs
 

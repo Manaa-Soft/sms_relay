@@ -2,13 +2,13 @@
 
 ## Prerequisites
 
-- Frappe Framework v15+ with bench CLI
+- Frappe Framework v15+ with bench CLI (tested on v16)
 - ERPNext v15+ installed and configured
 - MariaDB / MySQL running
-- Python 3.10+
+- Python 3.10+ (tested on 3.14)
 - Node.js 16+
 - An Android phone with SMS Gateway app installed
-- SMS Gateway server running (Docker or native)
+- SMS Gateway server running in Docker
 
 ## Step 1: Install the Android SMS Gateway
 
@@ -25,11 +25,11 @@ mkdir -p config
 # Create config.yml
 cat > config.yml << 'EOF'
 server:
-  port: 8080
+  port: 8085
   auth:
     privateToken: "your-private-token-here"
   webhooks:
-    - url: "http://your-frappe-site:8080/api/method/sms_relay.api.webhook_receiver.incoming_webhook"
+    - url: "http://YOUR-FRAPPE-SITE/api/method/sms_relay.api.webhook_receiver.incoming_webhook"
       events:
         - sms:delivered
         - sms:failed
@@ -40,7 +40,7 @@ EOF
 # Start the server
 docker run -d \
   --name sms-gateway \
-  -p 8080:8080 \
+  -p 8085:8085 \
   -v $(pwd)/config:/app/config \
   ghcr.io/android-sms-gateway/server:latest
 ```
@@ -48,8 +48,8 @@ docker run -d \
 ### Android Phone Setup
 
 1. Install SMS Gateway app from GitHub Releases
-2. Open app → Settings → Server URL → enter `http://YOUR-SERVER-IP:8080`
-3. Enter credentials (private token)
+2. Open app → Settings → Server URL → enter `http://YOUR-SERVER-IP:8085`
+3. Enter credentials (username/password from your config)
 4. Select connection mode (Private for LAN, Cloud for internet)
 5. Phone should show "Connected" status
 
@@ -82,26 +82,27 @@ bench restart
 1. Go to **SMS Relay → SMS Gateway Settings**
 2. Fill in:
    - Enabled: ✓
-   - Sender Name: Your sender label
+   - Server URL: `http://YOUR-SERVER-IP:8085`
+   - API Path: `/api/3rdparty/v1/message` (default)
    - Routing Strategy: Round Robin (recommended)
    - Enable Failover: ✓
    - Global Rate Limit: 60
 3. Save
+4. Click **Test Connection** to verify
 
-## Step 4: Add SMS Devices
+## Step 4: Add SMS Device
 
 1. Go to **SMS Relay → SMS Device → New**
 2. Fill in:
    - Device Name: "Office Phone"
-   - Gateway URL: `http://YOUR-SERVER-IP:8080`
-   - Gateway Type: Android SMS Gateway
-   - API Key: (from the Android app settings)
-   - SIM Slot: 1
+   - Mode: Android SMS Gateway
+   - Server URL: `http://YOUR-SERVER-IP:8085`
+   - Username: (from phone app settings)
+   - Password: (from phone app settings)
    - Priority: 0 (highest)
-   - Hourly Quota: 500
-   - Daily Quota: 5000
    - Active: ✓
 3. Save
+4. Click **Connect Device** to auto-fetch device info
 
 ## Step 5: Create SMS Templates (Optional)
 
@@ -119,9 +120,10 @@ Dear {{ doc.customer }}, your invoice {{ doc.name }} for {{ frappe.utils.fmt_mon
 
 1. Go to **SMS Relay → SMS Notification → New**
 2. Configure:
+   - Notification Type: DocType notification
    - Reference DocType: Sales Invoice
-   - Event: On Submit
-   - Phone Field: customer_contact_person (or the field with phone)
+   - DocType Event: On Submit
+   - Field Name: customer_contact_person (or the field with phone)
    - Message Template: (your Jinja template)
    - Condition: `return doc.outstanding_amount > 0`
 3. Save
@@ -132,7 +134,7 @@ Dear {{ doc.customer }}, your invoice {{ doc.name }} for {{ frappe.utils.fmt_mon
 
 ```javascript
 frappe.call({
-    method: "sms_relay.api.endpoints.get_device_health",
+    method: "sms_relay.api.endpoints.test_connection",
     callback: function(r) {
         console.log(r.message);
     }
@@ -159,10 +161,12 @@ frappe.call({
 
 ## Post-Installation Checklist
 
-- [ ] SMS Gateway server running and accessible
-- [ ] Android phone connected and showing "Online"
+- [ ] SMS Gateway server running and accessible on port 8085
+- [ ] Android phone connected and showing "Connected"
 - [ ] SMS Gateway Settings configured and enabled
+- [ ] Test Connection successful
 - [ ] At least one SMS Device added and active
+- [ ] Connect Device successful (device info auto-filled)
 - [ ] Test SMS sent and received
 - [ ] Webhook configured for delivery receipts
 - [ ] (Optional) SMS Templates created

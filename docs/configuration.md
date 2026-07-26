@@ -6,26 +6,24 @@ Navigate to: **SMS Relay → SMS Gateway Settings**
 
 Singleton DocType — one record for the entire site.
 
-### General
+### Gateway
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| Enabled | Check | 0 | Master toggle. When off, no SMS is sent. |
-| Sender Name | Data | — | Default sender label. |
-| Server URL | Data | — | Global gateway server URL (e.g. `http://192.168.1.15:8080`). |
-| API Path | Data | — | API endpoint path. |
-| Username | Data | — | Gateway auth username. |
-| Password | Password | — | Gateway auth password. |
-| Private Token | Password | — | Bearer token alternative. |
-| Timeout | Int | 15 | HTTP timeout seconds. |
+| Enabled | Check | 1 | Master toggle. When off, no SMS is sent. |
+| Server URL | Data | — | Gateway server URL (e.g. `http://192.168.1.15:8085`). |
+| API Path | Data | /api/3rdparty/v1/message | API endpoint path. |
+| Timeout | Int | 15 | HTTP timeout in seconds. |
+| Max Retry Count | Int | 3 | Default retry attempts for failed sends. |
 
-### Routing & Failover
+### Routing & Rate Limiting
 
 | Field | Type | Default | Description |
 |---|---|---|---|
 | Routing Strategy | Select | Round Robin | How to select among multiple devices. |
 | Enable Failover | Check | 1 | Try next device if primary fails. |
 | Global Rate Limit | Int | 60 | Max SMS per minute across all devices. |
+| Check Opt-Out | Check | 1 | Skip opted-out numbers before sending. |
 
 ### Routing Strategies
 
@@ -35,12 +33,12 @@ Singleton DocType — one record for the entire site.
 | Priority | Try highest-priority device first, fall through on failure |
 | Random | Random device selection |
 
-### Webhook Security
+### Webhook (Incoming SMS)
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| Webhook Secret | Password | — | HMAC-SHA256 secret for verifying webhook signatures. |
-| Webhook Signature Header | Data | X-Webhook-Signature | Header containing the signature. |
+| Enable Incoming Webhooks | Check | 0 | Receive delivery receipts and incoming SMS. |
+| Webhook HMAC Secret | Password | — | Secret for verifying webhook signatures. |
 
 ---
 
@@ -50,27 +48,51 @@ Navigate to: **SMS Relay → SMS Device → New**
 
 Each Android phone or HTTP SMS API endpoint is a separate Device record.
 
-### Fields
+### Connection
 
 | Field | Type | Required | Description |
 |---|---|---|---|
 | Device Name | Data | Yes | Human-readable label (e.g. "Office Phone"). |
-| Gateway URL | Data | Yes | Gateway server URL for this device. |
-| Gateway Type | Select | Yes | Android SMS Gateway / Custom HTTP API. |
-| API Key | Password | No | Per-device authentication token. |
-| Active | Check | Yes | Enable/disable device. |
+| Device ID | Data | No | Unique ID from the phone app. Filled by Connect Device. |
+| Mode | Select | Yes | Android SMS Gateway / Custom HTTP API. |
+| Server URL | Data | Yes | Gateway server URL for this device (e.g. `http://192.168.1.15:8085`). |
+| Username | Data | No | Gateway auth username. |
+| Password | Password | No | Gateway auth password. |
+| SIM Number | Select | No | SIM slot 1 or 2. |
 | Priority | Int | No | Lower = higher priority. |
-| SIM Slot | Select | No | 1 or 2. |
-| Hourly Quota | Int | 500 | Max SMS per hour. |
-| Daily Quota | Int | 5000 | Max SMS per day. |
-| Webhook Callback URL | Data | No | Delivery report callback URL. |
+| Active | Check | Yes | Enable/disable device. |
 
-### Status Fields (Read-only)
+### Status (Read-only)
 
 | Field | Description |
 |---|---|
-| Battery Level | Device battery percentage |
+| Online | Whether the device is reachable (from Connect Device or health check) |
+| Last Heartbeat | Last successful communication time |
+| Device Model | Phone model (auto-detected) |
+| App Version | SMS Gateway app version |
+| Battery Level | Battery percentage |
 | Signal Strength | Network signal info |
+| Carrier Name | Mobile carrier |
+| SIM Phone Number | Phone number of the SIM |
+
+### Quotas
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| Daily Quota | Int | 5000 | Max SMS per day. Resets daily. |
+| Sent Today | Int | 0 | Current day count (read-only). |
+| Hourly Quota | Int | 500 | Max SMS per hour. |
+
+### Connect Device Button
+
+Click **Connect Device** in the form to auto-fetch device info from the gateway:
+- Queries `GET {server_url}/api/mobile/v1/device` for device details
+- Queries `GET {server_url}/health` for online status
+- Auto-fills: `device_id`, `device_model`, `carrier_name`, `sim_phone_number`, `app_version`, `battery_level`
+
+### Send Test SMS Button
+
+Click **Send Test SMS** to send a test message through this device.
 
 ---
 
@@ -119,13 +141,15 @@ Configure automatic SMS triggers on ERPNext documents.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| Enabled | Check | Yes | Enable/disable this rule. |
+| Notification Name | Data | Yes | Unique name. |
+| Notification Type | Select | Yes | DocType notification / SMS Alert / WhatsApp Message. |
+| Disabled | Check | No | Disable this rule. |
 | Reference DocType | Link: DocType | Yes | Target DocType (Sales Invoice, etc.). |
-| Event | Select | Yes | On Submit / On Save / On Validate. |
-| SMS Account | Link: SMS Device | No | Specific device (auto-select if empty). |
-| Phone Field | Data | Yes | Field name containing phone number. |
+| DocType Event | Select | Yes | On Submit / On Save / On Validate / On Payment / On Cancel / On TRASH. |
+| Field Name | Data | Yes | Field containing phone number. |
 | Message Template | Code (Jinja) | Yes | Jinja2 message body. |
 | Condition | Code (Python) | No | `return True` to send. |
+| Event Frequency | Select | No | How often to trigger (for scheduled notifications). |
 
 ### Condition Examples
 
@@ -142,7 +166,7 @@ return doc.mode_of_payment == "Bank Transfer"
 
 ### Phone Resolution Order
 
-1. `phone_field` value on the document
+1. `field_name` value on the document
 2. Customer/Supplier linked Contact phone
 3. Document `mobile_no` or `phone` field
 
@@ -165,10 +189,10 @@ server:
 
 ### HMAC Signature Verification
 
-If `Webhook Secret` is configured:
+If `Webhook HMAC Secret` is configured:
 
-1. Device computes `HMAC-SHA256(secret, payload)` 
-2. Sends signature in the configured header (default: `X-Webhook-Signature`)
+1. Device computes `HMAC-SHA256(secret, payload)`
+2. Sends signature in `X-Webhook-Signature` header
 3. Server verifies before processing
 
 ---
@@ -197,13 +221,8 @@ phone,name
 
 ---
 
-## Environment Variables
-
-No environment variables required. All configuration is in the SMS Gateway Settings DocType.
-
 ## Caching
 
 - Gateway settings cached for 300 seconds
 - Opt-out list cached for 600 seconds
 - Round-robin counter cached per-cycle
-- Throttle counters cached per-minute

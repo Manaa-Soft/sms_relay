@@ -15,9 +15,9 @@ sms_relay registers jobs with the Frappe scheduler. These run automatically at t
    a. Validates phone number
    b. Selects device via routing strategy (Round Robin / Priority / Random)
    c. Checks per-minute rate limit
-   d. HTTP POST to gateway
-   e. On success: status → "Sent", creates SMS Log entry
-   f. On failure: increments retry_count. If < max_retries → status stays "Queued" with backoff. If >= max_retries → status → "Failed"
+   d. HTTP POST to gateway with Basic Auth (`username:password` from device)
+   e. On success (HTTP 200/202): status → "Sent", creates SMS Log entry
+   f. On failure: increments retry_count. If < max_retries → status stays "Queued". If >= max_retries → status → "Failed"
 4. Commits all database changes
 
 ---
@@ -75,10 +75,12 @@ sms_relay registers jobs with the Frappe scheduler. These run automatically at t
 **Purpose:** Checks device heartbeat, battery status, and signal strength.
 
 **What it does:**
-1. For each enabled device:
-   a. GET request to `{gateway_url}/api/device`
-   b. Update battery_level, signal_strength, is_active
-   c. If unreachable → set is_active = 0
+1. For each enabled device (`is_active = 1`):
+   a. GET request to `{server_url}/api/mobile/v1/device` with Basic Auth
+   b. Update battery_level, signal_strength, carrier_name, device_model, app_version
+   c. GET `{server_url}/health` for online status
+   d. Update `is_online`, `last_heartbeat`
+   e. If unreachable → set is_online = 0
 
 ---
 
@@ -128,10 +130,10 @@ sms_relay registers jobs with the Frappe scheduler. These run automatically at t
 
 **Frequency:** Daily
 
-**Purpose:** Resets daily counters on all devices.
+**Purpose:** Resets daily counters on all active devices.
 
 **What it does:**
-1. Sets sent_today = 0 on all SMS Device records
+1. Sets sent_today = 0 on all SMS Device records where `is_active = 1`
 2. Commits changes
 
 ---
