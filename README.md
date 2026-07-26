@@ -108,7 +108,9 @@ Configure document-triggered SMS:
 - **Reference DocType**: Sales Invoice, Payment Request, etc.
 - **DocType Event**: On Submit / On Save / On Validate
 - **Field Name**: Field containing phone number
-- **Message Template**: Jinja2 code
+- **Template Type**: **Jinja** (use `{{ doc.field }}` syntax) or **Parameter** (use `{{1}}`, `{{2}}` mapped via Fields table)
+- **Message Template**: Template body
+- **Fields** (Parameter mode only): Map each `{{N}}` to a DocType field name
 - **Condition**: Python expression (e.g., `return doc.grand_total > 1000`)
 
 ### 5. Test
@@ -132,7 +134,7 @@ frappe.call({
 | SMS Opt Out | STOP blacklist registry |
 | SMS Bulk Message | Campaign manager with CSV upload |
 | SMS Bulk Recipient | Child table for bulk recipients |
-| SMS Notification | Doc-triggered automated SMS rules |
+| SMS Notification | Doc-triggered automated SMS rules with Jinja or Parameter templates |
 | SMS Notification Log | Delivery audit log per document event |
 | SMS Outbox | Async outbox with exponential backoff retry |
 | SMS Recipient List | Saved target groups (e.g., "VIP Customers") |

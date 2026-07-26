@@ -266,28 +266,39 @@ Campaign manager for mass SMS messaging.
 
 **Module:** SMS Relay | **Type:** Standard
 
-Doc-triggered automated SMS rules with Jinja templates and positional parameters.
+Doc-triggered automated SMS rules with Jinja or Parameter templates.
 
 ### Fields
 
 | Field | Type | Description |
 |---|---|---|
 | notification_name | Data | Unique name |
-| notification_type | Select | DocType notification / SMS Alert / WhatsApp Message |
+| notification_type | Select | DocType notification / Scheduler Event |
 | disabled | Check | Disable this rule |
 | reference_doctype | Link: DocType | Target DocType |
 | doctype_event | Select | On Submit / On Save / On Validate / On Payment / On Cancel / On TRASH |
 | field_name | Data | Field containing phone number |
-| message_template | Code (Jinja) | Jinja2 message body — supports `{{1}}`, `{{2}}` positional params |
+| template | Link: SMS Template | Linked template |
+| template_type | Select | **Jinja** or **Parameter** — controls how the template body is rendered |
+| message_template | Code (Jinja) | Template body |
 | condition | Code (Python) | `return True` to send |
 | event_frequency | Select | How often to trigger |
 | days_in_advance | Int | For scheduled: days before date field |
 | date_changed | Select | Date/Datetime field to check (auto-populated from DocType) |
 | set_property_after_alert | Data | Field to update after sending |
 | property_value | Data | Value to set |
-| fields | Table: SMS Message Field | Positional parameter mappings for `{{1}}`, `{{2}}` placeholders |
+| fields | Table: SMS Message Field | Positional parameter mappings (Parameter mode only) |
 
-### Positional Parameters
+### Template Type
+
+| Type | Syntax | When to use |
+|---|---|---|
+| **Jinja** | `{{ doc.field_name }}` | Full access to document fields, Jinja2 filters, conditionals |
+| **Parameter** | `{{1}}`, `{{2}}` | Simple positional replacement — maps each number to a field via the Fields table |
+
+In **Jinja** mode, the Fields table is hidden. In **Parameter** mode, the Fields table is visible and each row maps a `{{N}}` placeholder to a DocType field name.
+
+### Positional Parameters (Parameter Mode)
 
 The **Fields** child table maps `{{1}}`, `{{2}}`, etc. in the message template to document fields:
 

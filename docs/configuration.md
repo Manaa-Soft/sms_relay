@@ -150,17 +150,25 @@ Configure automatic SMS triggers on ERPNext documents.
 | Field | Type | Required | Description |
 |---|---|---|---|
 | Notification Name | Data | Yes | Unique name. |
-| Notification Type | Select | Yes | DocType notification / SMS Alert / WhatsApp Message. |
+| Notification Type | Select | Yes | DocType Event / Scheduler Event. |
 | Disabled | Check | No | Disable this rule. |
 | Reference DocType | Link: DocType | Yes | Target DocType (Sales Invoice, etc.). |
 | DocType Event | Select | Yes | On Submit / On Save / On Validate / On Payment / On Cancel / On TRASH. |
 | Field Name | Data | Yes | Field containing phone number. |
-| Message Template | Code (Jinja) | Yes | Jinja2 body — supports `{{1}}`, `{{2}}` positional params |
+| Template Type | Select | Yes | **Jinja** (`{{ doc.field }}` syntax) or **Parameter** (`{{1}}`, `{{2}}` mapped via Fields table). |
+| Message Template | Code (Jinja) | Yes | Template body. |
 | Condition | Code (Python) | No | `return True` to send. |
 | Event Frequency | Select | No | How often to trigger (for scheduled notifications). |
-| Fields | Table: SMS Message Field | No | Maps `{{1}}`, `{{2}}` placeholders to document fields. |
+| Fields | Table: SMS Message Field | No | Maps `{{1}}`, `{{2}}` placeholders to document fields (Parameter mode only). |
 
-### Positional Parameters (Fields Table)
+### Template Types
+
+| Type | Syntax | Fields Table | Example |
+|---|---|---|---|
+| **Jinja** | `{{ doc.field_name }}` | Hidden | `Dear {{ doc.customer }}, your invoice {{ doc.name }} is due.` |
+| **Parameter** | `{{1}}`, `{{2}}` | Visible | `Hello {{1}}, your order {{2}} is ready.` |
+
+### Positional Parameters (Parameter Mode)
 
 Add rows to the **Fields** child table to map `{{1}}`, `{{2}}`, etc. to document fields:
 
@@ -170,7 +178,7 @@ Add rows to the **Fields** child table to map `{{1}}`, `{{2}}`, etc. to document
 | 2 | name | `{{2}}` = document's name value |
 | 3 | grand_total | `{{3}}` = document's grand_total value |
 
-You can mix both syntaxes in the same template — Jinja2 `{{ doc.field }}` and positional `{{1}}` work together.
+You can mix both syntaxes in the same template — Jinja2 `{{ doc.field }}` and positional `{{1}}` work together when using **Jinja** template type.
 
 ### Condition Examples
 
