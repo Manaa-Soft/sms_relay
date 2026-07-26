@@ -12,19 +12,19 @@ app_include_js = [
 
 doc_events = {
     "*": {
-        "before_insert": "sms_relay.utils.notification_handler.on_doc_event",
-        "after_insert": "sms_relay.utils.notification_handler.on_doc_event",
-        "before_validate": "sms_relay.utils.notification_handler.on_doc_event",
-        "validate": "sms_relay.utils.notification_handler.on_doc_event",
-        "on_update": "sms_relay.utils.notification_handler.on_doc_event",
-        "before_submit": "sms_relay.utils.notification_handler.on_doc_event",
-        "on_submit": "sms_relay.utils.notification_handler.on_doc_event",
-        "before_cancel": "sms_relay.utils.notification_handler.on_doc_event",
-        "on_cancel": "sms_relay.utils.notification_handler.on_doc_event",
-        "on_trash": "sms_relay.utils.notification_handler.on_doc_event",
-        "after_delete": "sms_relay.utils.notification_handler.on_doc_event",
-        "before_update_after_submit": "sms_relay.utils.notification_handler.on_doc_event",
-        "on_update_after_submit": "sms_relay.utils.notification_handler.on_doc_event",
+        "before_insert": "sms_relay.core.notification_handler.on_doc_event",
+        "after_insert": "sms_relay.core.notification_handler.on_doc_event",
+        "before_validate": "sms_relay.core.notification_handler.on_doc_event",
+        "validate": "sms_relay.core.notification_handler.on_doc_event",
+        "on_update": "sms_relay.core.notification_handler.on_doc_event",
+        "before_submit": "sms_relay.core.notification_handler.on_doc_event",
+        "on_submit": "sms_relay.core.notification_handler.on_doc_event",
+        "before_cancel": "sms_relay.core.notification_handler.on_doc_event",
+        "on_cancel": "sms_relay.core.notification_handler.on_doc_event",
+        "on_trash": "sms_relay.core.notification_handler.on_doc_event",
+        "after_delete": "sms_relay.core.notification_handler.on_doc_event",
+        "before_update_after_submit": "sms_relay.core.notification_handler.on_doc_event",
+        "on_update_after_submit": "sms_relay.core.notification_handler.on_doc_event",
     }
 }
 
@@ -42,7 +42,6 @@ scheduler_events = {
         "sms_relay.tasks.retry_failed_sms",
         "sms_relay.tasks.cleanup_old_logs",
         "sms_relay.tasks.reset_daily_quotas",
-        "sms_relay.frappe_whatsapp.doctype.sms_notification.sms_notification.trigger_notifications",
     ],
 }
 
