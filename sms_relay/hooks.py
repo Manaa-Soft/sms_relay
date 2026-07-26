@@ -4,7 +4,6 @@ app_publisher = "SMS Relay"
 app_description = "Frappe/ERPNext SMS Gateway Integration"
 app_version = "1.0.0"
 
-app_include_css = None
 app_include_js = [
     "/assets/sms_relay/js/sms_dashboard.js",
     "/assets/sms_relay/js/bulk_message.js",
