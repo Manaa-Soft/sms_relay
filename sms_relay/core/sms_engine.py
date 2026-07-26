@@ -127,7 +127,10 @@ def _send_android_gateway(device, phone, message, sender):
         return {"success": False, "error": "No server URL configured on device"}
     username = device.username or ""
     password = device.get_password("password") or ""
-    url = "{}/api/3rdparty/v1/message".format(base_url)
+    settings = get_relay_settings()
+    api_path = (settings.get("api_path") or "/api/3rdparty/v1/message").lstrip("/")
+    timeout = cint(settings.get("timeout")) or 30
+    url = "{}/{}".format(base_url, api_path)
     payload = {
         "textMessage": {"text": message},
         "phoneNumbers": [phone],
@@ -138,11 +141,11 @@ def _send_android_gateway(device, phone, message, sender):
             url,
             json=payload,
             auth=requests.auth.HTTPBasicAuth(username, password) if username else None,
-            timeout=30,
+            timeout=timeout,
         )
-        if resp.status_code in (200, 201):
+        if resp.status_code in (200, 201, 202):
             data = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
-            return {"success": True, "message_id": data.get("id") or data.get("messageId")}
+            return {"success": True, "message_id": data.get("id") or data.get("messageId") or data.get("requestId")}
         return {"success": False, "error": "HTTP {}: {}".format(resp.status_code, resp.text[:200])}
     except requests.exceptions.RequestException as e:
         return {"success": False, "error": str(e)[:200]}

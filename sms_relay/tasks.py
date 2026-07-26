@@ -1,6 +1,7 @@
 import frappe
 from frappe import _
 from frappe.utils import now, cint, add_to_date, getdate
+from sms_relay.core.sms_utils import get_relay_settings
 
 def process_sms_queue():
     pending = frappe.get_all(
@@ -135,7 +136,9 @@ def _check_single_device(device):
             username = device_doc.username or ""
             password = device_doc.get_password("password") or ""
             auth = requests.auth.HTTPBasicAuth(username, password) if username else None
-            resp = requests.get(url, auth=auth, timeout=10)
+            settings = get_relay_settings()
+            timeout = cint(settings.get("timeout")) or 10
+            resp = requests.get(url, auth=auth, timeout=timeout)
             if resp.status_code == 200:
                 data = resp.json()
                 frappe.db.set_value("SMS Device", device.name, {
@@ -205,7 +208,7 @@ def cleanup_old_logs():
     return {"cleaned_up": deleted}
 
 def reset_daily_quotas():
-    devices = frappe.get_all("SMS Device", filters={"is_enabled": 1}, fields=["name"])
+    devices = frappe.get_all("SMS Device", filters={"is_active": 1}, fields=["name"])
     for device in devices:
         frappe.db.set_value("SMS Device", device.name, "sent_today", 0)
     frappe.db.commit()
