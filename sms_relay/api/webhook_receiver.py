@@ -16,7 +16,7 @@ def incoming_webhook():
     secret = settings.get_password("webhook_secret") if hasattr(settings, "webhook_secret") else None
     if secret:
         from sms_relay.core.sms_utils import verify_webhook_signature
-        signature = frappe.get_request_header(settings.webhook_signature_header or "X-Webhook-Signature")
+        signature = frappe.get_request_header("X-Webhook-Signature")
         if not verify_webhook_signature(payload.encode("utf-8"), secret, signature):
             frappe.throw(_("Invalid webhook signature"), frappe.ValidationError)
             return
