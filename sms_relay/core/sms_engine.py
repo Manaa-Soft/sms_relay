@@ -127,7 +127,7 @@ def _send_android_gateway(device, phone, message, sender):
         return {"success": False, "error": "No server URL configured on device"}
     username = device.username or ""
     password = device.get_password("password") or ""
-    url = "{}/message".format(base_url)
+    url = "{}/api/3rdparty/v1/message".format(base_url)
     payload = {
         "textMessage": {"text": message},
         "phoneNumbers": [phone],

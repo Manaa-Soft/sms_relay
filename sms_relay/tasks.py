@@ -129,7 +129,7 @@ def _check_single_device(device):
     import requests
     if device.gateway_type == "Android SMS Gateway":
         base_url = (device.server_url or "").rstrip("/")
-        url = "{}/device".format(base_url)
+        url = "{}/api/mobile/v1/device".format(base_url)
         try:
             device_doc = frappe.get_doc("SMS Device", device.name)
             username = device_doc.username or ""
