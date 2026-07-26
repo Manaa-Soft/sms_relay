@@ -44,14 +44,31 @@
    "read_only": 1,
    "in_list_view": 1
   },
-  {
-   "fieldname": "delivery_status",
-   "fieldtype": "Select",
-   "label": "Delivery Status",
-   "options": "Pending\nSent\nDelivered\nFailed\nExpired",
-   "default": "Pending",
-   "read_only": 1
-  },
+   {
+    "fieldname": "delivery_status",
+    "fieldtype": "Select",
+    "label": "Delivery Status",
+    "options": "Pending\nSent\nDelivered\nFailed\nExpired",
+    "default": "Pending",
+    "read_only": 1,
+    "in_list_view": 1,
+    "in_standard_filter": 1
+   },
+   {
+    "fieldname": "delivery_at",
+    "fieldtype": "Datetime",
+    "label": "Delivery Report Time"
+   },
+   {
+    "fieldname": "column_break_del",
+    "fieldtype": "Column Break"
+   },
+   {
+    "fieldname": "channel",
+    "fieldtype": "Data",
+    "label": "Channel",
+    "default": "SMS"
+   },
   {
    "fieldname": "section_source",
    "fieldtype": "Section Break",

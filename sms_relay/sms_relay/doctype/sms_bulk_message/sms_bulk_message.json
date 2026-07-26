@@ -1,0 +1,39 @@
+{
+ "name": "SMS Bulk Message",
+ "module": "SMS Relay",
+ "doctype": "DocType",
+ "document_type": "Document",
+ "engine": "InnoDB",
+ "is_submittable": 0,
+ "istable": 0,
+ "editable_grid": 1,
+ "track_changes": 1,
+ "autoname": "format:BULK-{####}",
+ "fields": [
+  {"fieldname": "message_type", "fieldtype": "Select", "label": "Message Type", "options": "Text\nTemplate", "reqd": 1, "default": "Text", "in_list_view": 1},
+  {"fieldname": "message", "fieldtype": "Long Text", "label": "Message", "depends_on": "eval:doc.message_type=='Text'"},
+  {"fieldname": "template", "fieldtype": "Link", "label": "Template", "options": "SMS Template", "depends_on": "eval:doc.message_type=='Template'"},
+  {"fieldname": "column_break_1", "fieldtype": "Column Break"},
+  {"fieldname": "account", "fieldtype": "Link", "label": "Account", "options": "SMS Device"},
+  {"fieldname": "scheduled_at", "fieldtype": "Datetime", "label": "Scheduled At"},
+  {"fieldname": "section_break_status", "fieldtype": "Section Break", "label": "Status"},
+  {"fieldname": "status", "fieldtype": "Select", "label": "Status", "options": "Draft\nProcessing\nCompleted\nCancelled", "default": "Draft", "in_list_view": 1, "read_only": 1},
+  {"fieldname": "total_recipients", "fieldtype": "Int", "label": "Total Recipients", "default": 0, "read_only": 1, "in_list_view": 1},
+  {"fieldname": "sent_count", "fieldtype": "Int", "label": "Sent", "default": 0, "read_only": 1, "in_list_view": 1},
+  {"fieldname": "failed_count", "fieldtype": "Int", "label": "Failed", "default": 0, "read_only": 1, "in_list_view": 1},
+  {"fieldname": "pending_count", "fieldtype": "Int", "label": "Pending", "default": 0, "read_only": 1},
+  {"fieldname": "column_break_status", "fieldtype": "Column Break"},
+  {"fieldname": "started_at", "fieldtype": "Datetime", "label": "Started At", "read_only": 1},
+  {"fieldname": "completed_at", "fieldtype": "Datetime", "label": "Completed At", "read_only": 1},
+  {"fieldname": "section_break_recipients", "fieldtype": "Section Break", "label": "Recipients"},
+  {"fieldname": "recipients", "fieldtype": "Table", "label": "Recipients", "options": "SMS Bulk Recipient"}
+ ],
+ "permissions": [
+  {"role": "System Manager", "read": 1, "write": 1, "delete": 1, "create": 1},
+  {"role": "SMS Manager", "read": 1, "write": 1, "create": 1},
+  {"role": "SMS Operator", "read": 1, "create": 1}
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "title_field": "name"
+}

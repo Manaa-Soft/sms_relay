@@ -1,0 +1,30 @@
+{
+ "name": "SMS Opt Out",
+ "module": "SMS Relay",
+ "doctype": "DocType",
+ "document_type": "Document",
+ "engine": "InnoDB",
+ "is_submittable": 0,
+ "istable": 0,
+ "editable_grid": 1,
+ "track_changes": 1,
+ "autoname": "format:SMSOPT-{####}",
+ "fields": [
+  {"fieldname": "phone", "fieldtype": "Data", "label": "Phone Number", "reqd": 1, "unique": 1, "in_list_view": 1, "in_standard_filter": 1},
+  {"fieldname": "opted_out", "fieldtype": "Check", "label": "Opted Out", "default": 1, "in_list_view": 1},
+  {"fieldname": "reason", "fieldtype": "Small Text", "label": "Reason"},
+  {"fieldname": "source", "fieldtype": "Select", "label": "Source", "options": "Manual\nSTOP\nAPI", "default": "Manual"},
+  {"fieldname": "opted_out_date", "fieldtype": "Datetime", "label": "Opted Out Date", "default": "Now"},
+  {"fieldname": "column_break_opts", "fieldtype": "Column Break"},
+  {"fieldname": "restored_by", "fieldtype": "Link", "label": "Restored By", "options": "User", "read_only": 1},
+  {"fieldname": "restored_date", "fieldtype": "Datetime", "label": "Restored Date", "read_only": 1}
+ ],
+ "permissions": [
+  {"role": "System Manager", "read": 1, "write": 1, "delete": 1, "create": 1},
+  {"role": "SMS Manager", "read": 1, "write": 1, "create": 1},
+  {"role": "SMS Operator", "read": 1}
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "title_field": "phone"
+}

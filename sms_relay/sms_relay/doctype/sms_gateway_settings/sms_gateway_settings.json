@@ -156,26 +156,95 @@
    "fieldtype": "Section Break",
    "label": "Compliance"
   },
-  {
-   "fieldname": "check_opt_out",
-   "fieldtype": "Check",
-   "label": "Check Opt-Out List Before Sending",
-   "default": 1
-  }
- ],
+   {
+    "fieldname": "check_opt_out",
+    "fieldtype": "Check",
+    "label": "Check Opt-Out List Before Sending",
+    "default": 1
+   },
+   {
+    "fieldname": "section_break_routing",
+    "fieldtype": "Section Break",
+    "label": "Routing & Failover"
+   },
+   {
+    "fieldname": "routing_strategy",
+    "fieldtype": "Select",
+    "label": "Routing Strategy",
+    "options": "Round Robin\nPriority\nRandom",
+    "default": "Round Robin"
+   },
+   {
+    "fieldname": "failover_enabled",
+    "fieldtype": "Check",
+    "label": "Enable Failover",
+    "default": 1
+   },
+   {
+    "fieldname": "column_break_routing",
+    "fieldtype": "Column Break"
+   },
+   {
+    "fieldname": "global_rate_limit",
+    "fieldtype": "Int",
+    "label": "Global Rate Limit (per minute)",
+    "default": 60
+   },
+   {
+    "fieldname": "section_break_webhook",
+    "fieldtype": "Section Break",
+    "label": "Webhook Security"
+   },
+   {
+    "fieldname": "column_break_webhook",
+    "fieldtype": "Column Break"
+   },
+   {
+    "fieldname": "webhook_signature_header",
+    "fieldtype": "Data",
+    "label": "Webhook Signature Header",
+    "default": "X-Webhook-Signature"
+   }
+  ],
  "permissions": [
-  {
-   "role": "System Manager",
-   "read": 1,
-   "write": 1,
-   "create": 1,
-   "delete": 1,
-   "email": 0,
-   "print": 0,
-   "report": 0,
-   "export": 0,
-   "import": 0,
-   "share": 0
-  }
- ]
-}
+   {
+    "role": "System Manager",
+    "read": 1,
+    "write": 1,
+    "create": 1,
+    "delete": 1,
+    "email": 0,
+    "print": 0,
+    "report": 0,
+    "export": 0,
+    "import": 0,
+    "share": 0
+   },
+   {
+    "role": "SMS Manager",
+    "read": 1,
+    "write": 1,
+    "create": 1,
+    "delete": 0,
+    "email": 0,
+    "print": 0,
+    "report": 1,
+    "export": 0,
+    "import": 0,
+    "share": 0
+   },
+   {
+    "role": "SMS Operator",
+    "read": 1,
+    "write": 1,
+    "create": 0,
+    "delete": 0,
+    "email": 0,
+    "print": 0,
+    "report": 0,
+    "export": 0,
+    "import": 0,
+    "share": 0
+   }
+  ]
+ }

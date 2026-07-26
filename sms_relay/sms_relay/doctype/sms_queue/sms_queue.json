@@ -124,13 +124,29 @@
    "label": "Scheduled At",
    "description": "Leave empty for immediate"
   },
-  {
-   "fieldname": "sent_at",
-   "fieldtype": "Datetime",
-   "label": "Sent At",
-   "read_only": 1
-  }
- ],
+   {
+    "fieldname": "sent_at",
+    "fieldtype": "Datetime",
+    "label": "Sent At",
+    "read_only": 1
+   },
+   {
+    "fieldname": "priority_tier",
+    "fieldtype": "Select",
+    "label": "Priority Tier",
+    "options": "High\nNormal\nLow",
+    "default": "Normal",
+    "in_list_view": 1,
+    "in_standard_filter": 1
+   },
+   {
+    "fieldname": "target_sim",
+    "fieldtype": "Select",
+    "label": "Target SIM",
+    "options": "Auto\n1\n2",
+    "default": "Auto"
+   }
+  ],
  "permissions": [
   {
    "role": "System Manager",

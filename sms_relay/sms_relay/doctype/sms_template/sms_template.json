@@ -62,14 +62,51 @@
    "label": "Available Variables",
    "collapsible": 1
   },
-  {
-   "fieldname": "variables_description",
-   "fieldtype": "Small Text",
-   "label": "Variables",
-   "read_only": 1,
-   "description": "For Invoice: doc, customer_name, grand_total, due_date, outstanding_amount, name, currency\nFor Payment: doc, party_name, paid_amount, posting_date, name, reference_name\nFor Overdue: doc, customer_name, name, outstanding_amount, due_date, days_overdue"
-  }
- ],
+   {
+    "fieldname": "variables_description",
+    "fieldtype": "Small Text",
+    "label": "Variables",
+    "read_only": 1,
+    "description": "For Invoice: doc, customer_name, grand_total, due_date, outstanding_amount, name, currency\nFor Payment: doc, party_name, paid_amount, posting_date, name, reference_name\nFor Overdue: doc, customer_name, name, outstanding_amount, due_date, days_overdue"
+   },
+   {
+    "fieldname": "section_break_enhanced",
+    "fieldtype": "Section Break",
+    "label": "Template Details"
+   },
+   {
+    "fieldname": "language",
+    "fieldtype": "Link",
+    "label": "Language",
+    "options": "Language"
+   },
+   {
+    "fieldname": "header",
+    "fieldtype": "Small Text",
+    "label": "Header"
+   },
+   {
+    "fieldname": "column_break_enhanced",
+    "fieldtype": "Column Break"
+   },
+   {
+    "fieldname": "footer",
+    "fieldtype": "Small Text",
+    "label": "Footer"
+   },
+   {
+    "fieldname": "char_count",
+    "fieldtype": "Int",
+    "label": "Character Count",
+    "read_only": 1
+   },
+   {
+    "fieldname": "sms_parts",
+    "fieldtype": "Int",
+    "label": "SMS Parts",
+    "read_only": 1
+   }
+  ],
  "permissions": [
   {
    "role": "System Manager",

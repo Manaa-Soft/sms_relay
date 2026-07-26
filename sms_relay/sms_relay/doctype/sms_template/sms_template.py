@@ -48,6 +48,9 @@ class SMSTemplate(Document):
             2. ``message_template`` must not exceed 1600 characters to remain
                within reasonable SMS concatenation limits.
 
+        Also computes ``char_count`` and ``sms_parts`` based on the template
+        content length.
+
         Raises:
             frappe.exceptions.ValidationError: If the template is shorter than
                 5 characters or longer than 1600 characters.
@@ -56,3 +59,8 @@ class SMSTemplate(Document):
             frappe.throw("Message template is too short (minimum 5 characters)")
         if self.message_template and len(self.message_template) > 1600:
             frappe.throw("Message template exceeds 1600 characters (SMS limit)")
+        self.char_count = len(self.message_template) if self.message_template else 0
+        if self.char_count <= 160:
+            self.sms_parts = 1 if self.char_count > 0 else 0
+        else:
+            self.sms_parts = -(-self.char_count // 153)

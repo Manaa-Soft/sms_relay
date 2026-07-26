@@ -1,0 +1,14 @@
+{
+ "name": "SMS Message Field",
+ "module": "SMS Relay",
+ "doctype": "DocType",
+ "document_type": "Document",
+ "engine": "InnoDB",
+ "istable": 1,
+ "fields": [
+  {"fieldname": "field_name", "fieldtype": "Data", "label": "Field Name", "reqd": 1, "in_list_view": 1}
+ ],
+ "permissions": [],
+ "sort_field": "creation",
+ "sort_order": "ASC"
+}

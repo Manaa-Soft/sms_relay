@@ -1,0 +1,24 @@
+{
+ "name": "SMS Recipient List",
+ "module": "SMS Relay",
+ "doctype": "DocType",
+ "document_type": "Document",
+ "engine": "InnoDB",
+ "is_submittable": 0,
+ "istable": 0,
+ "autoname": "field:list_name",
+ "fields": [
+  {"fieldname": "list_name", "fieldtype": "Data", "label": "List Name", "reqd": 1, "unique": 1, "in_list_view": 1},
+  {"fieldname": "description", "fieldtype": "Small Text", "label": "Description"},
+  {"fieldname": "column_break_1", "fieldtype": "Column Break"},
+  {"fieldname": "recipients", "fieldtype": "Table", "label": "Recipients", "options": "SMS Recipient"}
+ ],
+ "permissions": [
+  {"role": "System Manager", "read": 1, "write": 1, "delete": 1, "create": 1},
+  {"role": "SMS Manager", "read": 1, "write": 1, "create": 1},
+  {"role": "SMS Operator", "read": 1}
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "title_field": "list_name"
+}

@@ -1,0 +1,35 @@
+{
+ "name": "SMS Notification",
+ "module": "SMS Relay",
+ "doctype": "DocType",
+ "document_type": "Document",
+ "engine": "InnoDB",
+ "is_submittable": 0,
+ "istable": 0,
+ "editable_grid": 1,
+ "track_changes": 1,
+ "autoname": "format:RNOTIF-{####}",
+ "fields": [
+  {"fieldname": "enabled", "fieldtype": "Check", "label": "Enabled", "default": 1, "in_list_view": 1},
+  {"fieldname": "reference_doctype", "fieldtype": "Link", "label": "Reference DocType", "options": "DocType", "reqd": 1, "in_list_view": 1, "in_standard_filter": 1},
+  {"fieldname": "event", "fieldtype": "Select", "label": "Event", "options": "On Submit\nOn Save\nOn Validate", "reqd": 1, "default": "On Submit", "in_list_view": 1},
+  {"fieldname": "column_break_1", "fieldtype": "Column Break"},
+  {"fieldname": "account", "fieldtype": "Link", "label": "SMS Account", "options": "SMS Device"},
+  {"fieldname": "set_property_after_alert", "fieldtype": "Data", "label": "Set Property After Alert", "options": "DocType Field"},
+  {"fieldname": "property_value", "fieldtype": "Data", "label": "Property Value", "depends_on": "eval:doc.set_property_after_alert"},
+  {"fieldname": "section_break_message", "fieldtype": "Section Break", "label": "Message"},
+  {"fieldname": "phone_field", "fieldtype": "Data", "label": "Phone Field", "reqd": 1, "description": "Field name on the DocType that contains the phone number"},
+  {"fieldname": "message_template", "fieldtype": "Code", "label": "Message Template (Jinja)", "reqd": 1, "options": "Text Editor", "description": "Use {{ doc }}, {{ frappe.utils.nowdate() }}, etc."},
+  {"fieldname": "column_break_msg", "fieldtype": "Column Break"},
+  {"fieldname": "condition", "fieldtype": "Code", "label": "Condition (Python)", "options": "Python", "description": "Return True to send. Example: return doc.grand_total > 1000"},
+  {"fieldname": "section_break_fields", "fieldtype": "Section Break", "label": "Custom Fields"},
+  {"fieldname": "fields", "fieldtype": "Table", "label": "Fields", "options": "SMS Message Field"}
+ ],
+ "permissions": [
+  {"role": "System Manager", "read": 1, "write": 1, "delete": 1, "create": 1},
+  {"role": "SMS Manager", "read": 1, "write": 1, "create": 1}
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "title_field": "reference_doctype"
+}
