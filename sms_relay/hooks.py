@@ -11,10 +11,6 @@ app_include_js = [
     "/assets/sms_relay/js/notification_builder.js",
 ]
 
-jinja = {
-    "methods": "sms_relay.utils.jinja_methods.get_methods",
-}
-
 doc_events = {
     "Sales Invoice": {
         "on_submit": "sms_relay.core.notification_handler.on_doc_event",
@@ -49,28 +45,6 @@ scheduler_events = {
         "sms_relay.tasks.reset_daily_quotas",
     ],
 }
-
-override_whitelisted_methods = {
-    "frappe.core.doctype.sms_settings.sms_settings.send_sms": "sms_relay.core.sms_engine.send_sms_override",
-}
-
-website_route_rules = [
-    {
-        "from_route": "/sms/webhook",
-        "to_route": "sms/webhook",
-    },
-]
-
-fixtures = [
-    {
-        "dt": "Custom Field",
-        "filters": [["module", "=", "SMS Relay"]],
-    },
-    {
-        "dt": "Property Setter",
-        "filters": [["module", "=", "SMS Relay"]],
-    },
-]
 
 after_install = "sms_relay.setup.after_install"
 before_tests = "sms_relay.setup.before_tests"
