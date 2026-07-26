@@ -42,7 +42,7 @@ def _process_queue_item(queue_name):
         return
     if not _throttle_check(device_name):
         return
-    result = _send_to_device(device_name, phone, queue.message)
+    result = _send_to_device(device_name, phone, queue.message, queue_doc=queue)
     if result.get("success"):
         queue.status = "Sent"
         queue.save(ignore_permissions=True)
@@ -94,7 +94,7 @@ def _process_outbox_item(outbox_name):
         outbox.next_retry_at = add_to_date(now(), minutes=2 ** cint(outbox.attempts))
         outbox.save(ignore_permissions=True)
         return
-    result = _send_to_device(device_name, phone, queue.message)
+    result = _send_to_device(device_name, phone, queue.message, queue_doc=queue)
     outbox.attempts = cint(outbox.attempts) + 1
     outbox.last_retry_at = now()
     if result.get("success"):

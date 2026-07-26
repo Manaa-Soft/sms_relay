@@ -114,14 +114,14 @@ def _throttle_check(device_name):
     )
     return recent_count < global_limit
 
-def _send_to_device(device_name, phone, message, sender=""):
+def _send_to_device(device_name, phone, message, sender="", queue_doc=None):
     device = frappe.get_doc("SMS Device", device_name)
     if device.gateway_type == "Android SMS Gateway":
-        return _send_android_gateway(device, phone, message, sender)
+        return _send_android_gateway(device, phone, message, sender, queue_doc=queue_doc)
     else:
         return _send_custom_http(device, phone, message, sender)
 
-def _send_android_gateway(device, phone, message, sender):
+def _send_android_gateway(device, phone, message, sender, queue_doc=None):
     base_url = (device.server_url or "").rstrip("/")
     if not base_url:
         return {"success": False, "error": "No server URL configured on device"}
@@ -133,7 +133,14 @@ def _send_android_gateway(device, phone, message, sender):
         "textMessage": {"text": message},
         "phoneNumbers": [phone],
         "simNumber": cint(device.sim_number) if device.sim_number else 1,
+        "withDeliveryReport": True,
     }
+    if device.device_id:
+        payload["deviceId"] = device.device_id
+    if queue_doc:
+        priority_map = {"High": 100, "Normal": 0, "Low": -100}
+        tier = queue_doc.priority_tier or "Normal"
+        payload["priority"] = priority_map.get(tier, 0)
     headers = {"Content-Type": "application/json"}
     auth = None
     private_token = settings.get_password("private_token")
