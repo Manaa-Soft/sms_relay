@@ -89,5 +89,5 @@ def _idempotency_check(data, prefix):
     cache_key = "webhook_{}_{}".format(prefix, hash(json.dumps(data, sort_keys=True)))
     if frappe.cache().get_value(cache_key):
         return True
-    frappe.cache().set_value(cache_key, True, timeout=300)
+    frappe.cache().set_value(cache_key, True, expires_in_sec=300)
     return False

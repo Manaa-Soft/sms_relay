@@ -90,7 +90,7 @@ def get_relay_settings():
     if cached is not None:
         return cached
     settings = frappe.get_single("SMS Gateway Settings")
-    frappe.cache().set_value("sms_relay_settings", settings, timeout=300)
+    frappe.cache().set_value("sms_relay_settings", settings, expires_in_sec=300)
     return settings
 
 def get_opted_out_numbers():
@@ -102,7 +102,7 @@ def get_opted_out_numbers():
         filters={"opted_out": 1},
         pluck="phone",
     )
-    frappe.cache().set_value("sms_opted_out_numbers", numbers, timeout=600)
+    frappe.cache().set_value("sms_opted_out_numbers", numbers, expires_in_sec=600)
     return numbers
 
 def is_opted_out(phone):
