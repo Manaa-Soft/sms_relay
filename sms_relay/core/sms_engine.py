@@ -47,7 +47,7 @@ def _select_device(recipient):
     strategy = settings.get("routing_strategy") or "Round Robin"
     devices = frappe.get_all(
         "SMS Device",
-        filters={"is_enabled": 1, "is_active": 1},
+        filters={"is_active": 1},
         fields=["name", "device_name", "priority", "hourly_quota", "daily_quota"],
         order_by="priority asc",
     )
@@ -91,7 +91,7 @@ def _check_quota(device):
     sent_today = frappe.db.count(
         "SMS Log",
         filters={
-            "device_name": device.name,
+            "device": device.name,
             "status": "Sent",
             "creation": [">=", getdate()],
         },
@@ -107,7 +107,7 @@ def _throttle_check(device_name):
     recent_count = frappe.db.count(
         "SMS Log",
         filters={
-            "device_name": device_name,
+            "device": device_name,
             "status": "Sent",
             "creation": [">=", frappe.utils.add_to_date(now(), minutes=-1)],
         },
@@ -122,19 +122,24 @@ def _send_to_device(device_name, phone, message, sender=""):
         return _send_custom_http(device, phone, message, sender)
 
 def _send_android_gateway(device, phone, message, sender):
-    base_url = device.gateway_url.rstrip("/")
-    api_key = device.get_password("api_key") or ""
-    url = "{}/api/message".format(base_url)
-    headers = {"Authorization": "Bearer {}".format(api_key)} if api_key else {}
+    base_url = (device.server_url or "").rstrip("/")
+    if not base_url:
+        return {"success": False, "error": "No server URL configured on device"}
+    username = device.username or ""
+    password = device.get_password("password") or ""
+    url = "{}/message".format(base_url)
     payload = {
-        "message": message,
-        "phoneNumbers": phone,
-        "simNumber": cint(device.sim_slot) if device.sim_slot else 1,
+        "textMessage": {"text": message},
+        "phoneNumbers": [phone],
+        "simNumber": cint(device.sim_number) if device.sim_number else 1,
     }
-    if sender:
-        payload["sendTo"] = phone
     try:
-        resp = requests.post(url, json=payload, headers=headers, timeout=30)
+        resp = requests.post(
+            url,
+            json=payload,
+            auth=requests.auth.HTTPBasicAuth(username, password) if username else None,
+            timeout=30,
+        )
         if resp.status_code in (200, 201):
             data = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
             return {"success": True, "message_id": data.get("id") or data.get("messageId")}
@@ -143,7 +148,7 @@ def _send_android_gateway(device, phone, message, sender):
         return {"success": False, "error": str(e)[:200]}
 
 def _send_custom_http(device, phone, message, sender):
-    base_url = device.gateway_url.rstrip("/")
+    base_url = (device.server_url or "").rstrip("/")
     api_key = device.get_password("api_key") or ""
     headers = {"Authorization": "Bearer {}".format(api_key)} if api_key else {}
     headers["Content-Type"] = "application/json"

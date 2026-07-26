@@ -50,7 +50,7 @@ def send_bulk_sms(recipients_csv=None, recipients_json=None, message=None, templ
 def get_device_health():
     devices = frappe.get_all(
         "SMS Device",
-        filters={"is_enabled": 1},
+        filters={"is_active": 1},
         fields=["name", "device_name", "is_active", "battery_level", "signal_strength",
                 "hourly_quota", "daily_quota", "gateway_type", "sim_slot"],
     )
@@ -129,8 +129,8 @@ def get_sms_stats():
         "failed_today": frappe.db.count("SMS Log", filters={"status": "Failed", "creation": [">=", today]}),
         "delivered_today": frappe.db.count("SMS Log", filters={"delivery_status": "Delivered", "creation": [">=", today]}),
         "queued": frappe.db.count("SMS Queue", filters={"status": "Queued"}),
-        "total_devices": frappe.db.count("SMS Device", filters={"is_enabled": 1}),
-        "active_devices": frappe.db.count("SMS Device", filters={"is_enabled": 1, "is_active": 1}),
+        "total_devices": frappe.db.count("SMS Device", filters={"is_active": 1}),
+        "active_devices": frappe.db.count("SMS Device", filters={"is_active": 1, "is_active": 1}),
         "opted_out_count": frappe.db.count("SMS Opt Out", filters={"opted_out": 1}),
     }
     return stats

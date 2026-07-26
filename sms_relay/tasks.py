@@ -29,12 +29,12 @@ def _process_queue_item(queue_name):
         queue.save(ignore_permissions=True)
         return
     from sms_relay.core.sms_engine import _select_device, _send_to_device, _throttle_check, clean_phone
-    phone = clean_phone(queue.phone_number)
+    phone = clean_phone(queue.recipient)
     if not phone:
         queue.status = "Failed"
         queue.save(ignore_permissions=True)
         return
-    device_name = queue.device_name or _select_device(phone)
+    device_name = queue.device or _select_device(phone)
     if not device_name:
         queue.status = "Queued"
         queue.save(ignore_permissions=True)
@@ -86,7 +86,7 @@ def _process_outbox_item(outbox_name):
         outbox.save(ignore_permissions=True)
         return
     from sms_relay.core.sms_engine import _send_to_device, _throttle_check, clean_phone
-    phone = clean_phone(queue.phone_number)
+    phone = clean_phone(queue.recipient)
     device_name = outbox.account
     if not device_name or not _throttle_check(device_name):
         outbox.attempts = cint(outbox.attempts) + 1
@@ -116,8 +116,8 @@ def _process_outbox_item(outbox_name):
 def check_device_health():
     devices = frappe.get_all(
         "SMS Device",
-        filters={"is_enabled": 1},
-        fields=["name", "gateway_url", "gateway_type"],
+        filters={"is_active": 1},
+        fields=["name", "server_url", "gateway_type"],
     )
     for device in devices:
         try:
@@ -128,13 +128,14 @@ def check_device_health():
 def _check_single_device(device):
     import requests
     if device.gateway_type == "Android SMS Gateway":
-        base_url = device.gateway_url.rstrip("/")
-        url = "{}/api/device".format(base_url)
+        base_url = (device.server_url or "").rstrip("/")
+        url = "{}/device".format(base_url)
         try:
             device_doc = frappe.get_doc("SMS Device", device.name)
-            api_key = device_doc.get_password("api_key") if hasattr(device_doc, "api_key") else ""
-            headers = {"Authorization": "Bearer {}".format(api_key)} if api_key else {}
-            resp = requests.get(url, headers=headers, timeout=10)
+            username = device_doc.username or ""
+            password = device_doc.get_password("password") or ""
+            auth = requests.auth.HTTPBasicAuth(username, password) if username else None
+            resp = requests.get(url, auth=auth, timeout=10)
             if resp.status_code == 200:
                 data = resp.json()
                 frappe.db.set_value("SMS Device", device.name, {
