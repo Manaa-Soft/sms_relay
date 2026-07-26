@@ -94,13 +94,14 @@
    "depends_on": "eval:['Days After','Days Before'].includes(doc.doctype_event)",
    "mandatory_depends_on": "eval:['Days After','Days Before'].includes(doc.doctype_event)"
   },
-  {
-   "fieldname": "date_changed",
-   "fieldtype": "Data",
-   "label": "Reference Date",
-   "depends_on": "eval:['Days After','Days Before'].includes(doc.doctype_event)",
-   "mandatory_depends_on": "eval:['Days After','Days Before'].includes(doc.doctype_event)"
-  },
+   {
+    "fieldname": "date_changed",
+    "fieldtype": "Select",
+    "label": "Reference Date",
+    "description": "Date field from the DocType to compare against",
+    "depends_on": "eval:['Days After','Days Before'].includes(doc.doctype_event)",
+    "mandatory_depends_on": "eval:['Days After','Days Before'].includes(doc.doctype_event)"
+   },
   {
    "fieldname": "section_break_scheduler",
    "fieldtype": "Section Break",

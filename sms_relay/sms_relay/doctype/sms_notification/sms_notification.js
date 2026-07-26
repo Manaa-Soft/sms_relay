@@ -16,13 +16,20 @@ frappe.notification = {
 			};
 
 			let fields = frappe.get_doc("DocType", frm.doc.reference_doctype).fields;
-			let options = $.map(fields, function (d) {
+
+			let phone_options = $.map(fields, function (d) {
 				return frappe.model.no_value_type.includes(d.fieldtype)
 					? null
 					: get_select_options(d);
 			});
+			frm.set_df_property("set_property_after_alert", "options", [""].concat(phone_options));
 
-			frm.set_df_property("set_property_after_alert", "options", [""].concat(options));
+			let date_options = $.map(fields, function (d) {
+				return d.fieldtype === "Date" || d.fieldtype === "Datetime"
+					? { value: d.fieldname, label: d.fieldname + " (" + d.label + ")" }
+					: null;
+			});
+			frm.set_df_property("date_changed", "options", [""].concat(date_options));
 		});
 	},
 };
