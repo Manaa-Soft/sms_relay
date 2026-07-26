@@ -78,87 +78,84 @@
    "default": 1,
    "in_list_view": 1
   },
-  {
-   "fieldname": "section_status",
-   "fieldtype": "Section Break",
-   "label": "Status"
-  },
-  {
-   "fieldname": "last_heartbeat",
-   "fieldtype": "Datetime",
-   "label": "Last Heartbeat",
-   "read_only": 1
-  },
-  {
-   "fieldname": "is_online",
-   "fieldtype": "Check",
-   "label": "Online",
-   "read_only": 1
-  },
-  {
-   "fieldname": "daily_quota",
-   "fieldtype": "Int",
-   "label": "Daily Quota",
-   "default": 200
-  },
-  {
-   "fieldname": "sent_today",
-   "fieldtype": "Int",
-   "label": "Sent Today",
-   "default": 0,
-   "read_only": 1
-  },
-  {
-   "fieldname": "column_break_status",
-   "fieldtype": "Column Break"
-  },
-  {
-   "fieldname": "section_info",
-   "fieldtype": "Section Break",
-   "label": "Info"
-  },
-  {
-   "fieldname": "country_code",
-   "fieldtype": "Data",
-   "label": "Default Country Code",
-   "default": "+967"
-  },
    {
-    "fieldname": "notes",
-    "fieldtype": "Small Text",
-    "label": "Notes"
-   },
-   {
-    "fieldname": "section_break_hardware",
+    "fieldname": "section_status",
     "fieldtype": "Section Break",
-    "label": "Device Hardware"
+    "label": "Connection Status"
    },
    {
-    "fieldname": "sim_slot",
-    "fieldtype": "Select",
-    "label": "SIM Slot",
-    "options": "1\n2"
+    "fieldname": "is_online",
+    "fieldtype": "Check",
+    "label": "Online",
+    "read_only": 1
+   },
+   {
+    "fieldname": "last_heartbeat",
+    "fieldtype": "Datetime",
+    "label": "Last Connected",
+    "read_only": 1
+   },
+   {
+    "fieldname": "device_model",
+    "fieldtype": "Data",
+    "label": "Device Model",
+    "read_only": 1
+   },
+   {
+    "fieldname": "app_version",
+    "fieldtype": "Data",
+    "label": "App Version",
+    "read_only": 1
+   },
+   {
+    "fieldname": "column_break_status",
+    "fieldtype": "Column Break"
    },
    {
     "fieldname": "battery_level",
     "fieldtype": "Int",
-    "label": "Battery Level (%)",
+    "label": "Battery (%)",
     "read_only": 1
    },
    {
     "fieldname": "signal_strength",
     "fieldtype": "Data",
-    "label": "Signal Strength",
+    "label": "Signal",
     "read_only": 1
    },
    {
-    "fieldname": "column_break_hardware",
-    "fieldtype": "Column Break"
+    "fieldname": "carrier_name",
+    "fieldtype": "Data",
+    "label": "Carrier",
+    "read_only": 1
    },
    {
-    "fieldname": "section_break_quota",
+    "fieldname": "sim_phone_number",
+    "fieldtype": "Data",
+    "label": "SIM Phone Number",
+    "read_only": 1
+   },
+   {
+    "fieldname": "section_quota",
     "fieldtype": "Section Break",
-    "label": "Quotas & Auth"
+    "label": "Quotas"
+   },
+   {
+    "fieldname": "daily_quota",
+    "fieldtype": "Int",
+    "label": "Daily Quota",
+    "default": 200
+   },
+   {
+    "fieldname": "sent_today",
+    "fieldtype": "Int",
+    "label": "Sent Today",
+    "default": 0,
+    "read_only": 1
+   },
+   {
+    "fieldname": "column_break_quota_inner",
+    "fieldtype": "Column Break"
    },
    {
     "fieldname": "hourly_quota",
@@ -167,27 +164,48 @@
     "default": 500
    },
    {
-    "fieldname": "column_break_quota",
-    "fieldtype": "Column Break"
+    "fieldname": "section_info",
+    "fieldtype": "Section Break",
+    "label": "Info"
    },
    {
-    "fieldname": "gateway_type",
-    "fieldtype": "Select",
-    "label": "Gateway Type",
-    "options": "Android SMS Gateway\nCustom HTTP API",
-    "default": "Android SMS Gateway"
-   },
-   {
-    "fieldname": "api_key",
-    "fieldtype": "Password",
-    "label": "API Key"
-   },
-   {
-    "fieldname": "webhook_callback_url",
+    "fieldname": "country_code",
     "fieldtype": "Data",
-    "label": "Webhook Callback URL",
-    "options": "URL"
-   }
+    "label": "Default Country Code",
+    "default": "+967"
+   },
+    {
+     "fieldname": "notes",
+     "fieldtype": "Small Text",
+     "label": "Notes"
+    },
+    {
+     "fieldname": "section_break_quota",
+     "fieldtype": "Section Break",
+     "label": "Gateway Auth"
+    },
+    {
+     "fieldname": "gateway_type",
+     "fieldtype": "Select",
+     "label": "Gateway Type",
+     "options": "Android SMS Gateway\nCustom HTTP API",
+     "default": "Android SMS Gateway"
+    },
+    {
+     "fieldname": "api_key",
+     "fieldtype": "Password",
+     "label": "API Key"
+    },
+    {
+     "fieldname": "column_break_auth",
+     "fieldtype": "Column Break"
+    },
+    {
+     "fieldname": "webhook_callback_url",
+     "fieldtype": "Data",
+     "label": "Webhook Callback URL",
+     "options": "URL"
+    }
   ],
  "permissions": [
   {

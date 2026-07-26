@@ -41,31 +41,60 @@ def connect_device(device_name=None):
     username = device.username or ""
     password = device.get_password("password") or ""
     import requests
-    url = "{}/api/mobile/v1/device".format(base_url)
+    auth = requests.auth.HTTPBasicAuth(username, password) if username else None
+    updates = {"is_online": 0, "last_heartbeat": now()}
+    result = {"success": False}
+
     try:
         resp = requests.get(
-            url,
-            auth=requests.auth.HTTPBasicAuth(username, password) if username else None,
-            timeout=15,
+            "{}/api/mobile/v1/device".format(base_url),
+            auth=auth, timeout=15,
         )
         if resp.status_code == 200:
-            data = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
-            updates = {
-                "is_online": 1,
-                "last_heartbeat": now(),
-            }
+            data = resp.json()
+            if isinstance(data, list) and len(data) > 0:
+                data = data[0]
+            updates["is_online"] = 1
+            updates["last_heartbeat"] = now()
             if data.get("id"):
                 updates["device_id"] = data["id"]
-            if data.get("batteryLevel") is not None:
-                updates["battery_level"] = data["batteryLevel"]
-            if data.get("signalStrength"):
-                updates["signal_strength"] = str(data["signalStrength"])
-            frappe.db.set_value("SMS Device", device_name, updates)
-            frappe.db.commit()
-            return {"success": True, "device": data}
-        return {"success": False, "error": "HTTP {}: {}".format(resp.status_code, resp.text[:200])}
+            if data.get("name"):
+                updates["device_model"] = data["name"]
+            sim_cards = data.get("simCards") or []
+            if sim_cards:
+                sim = sim_cards[0]
+                if sim.get("carrierName"):
+                    updates["carrier_name"] = sim["carrierName"]
+                if sim.get("phoneNumber"):
+                    updates["sim_phone_number"] = sim["phoneNumber"]
+                if sim.get("simNumber"):
+                    updates["sim_number"] = sim["simNumber"]
+            result["device"] = data
     except requests.exceptions.RequestException as e:
-        return {"success": False, "error": str(e)[:200]}
+        result["error"] = str(e)[:200]
+
+    try:
+        resp = requests.get("{}/health".format(base_url), timeout=10)
+        if resp.status_code == 200:
+            health = resp.json()
+            checks = health.get("checks") or {}
+            battery = checks.get("battery:level") or {}
+            if battery.get("observedValue") is not None:
+                updates["battery_level"] = battery["observedValue"]
+            signal = checks.get("connection:status") or {}
+            if signal.get("observedValue") is not None:
+                updates["signal_strength"] = "Connected" if signal["observedValue"] else "Disconnected"
+            if health.get("version"):
+                updates["app_version"] = health["version"]
+            result["health"] = health
+    except requests.exceptions.RequestException:
+        pass
+
+    frappe.db.set_value("SMS Device", device_name, updates)
+    frappe.db.commit()
+    result["success"] = updates.get("is_online", 0) == 1
+    result["updates"] = updates
+    return result
 
 @frappe.whitelist()
 def send_sms_now(recipient=None, message=None, template=None, device=None, sim=None):
