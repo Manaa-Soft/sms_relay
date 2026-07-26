@@ -138,18 +138,19 @@
    "fieldtype": "Code",
    "label": "Message Template (Jinja)",
    "options": "HTML",
-   "description": "Use {{ doc }}, {{ frappe.utils.nowdate() }}. If Template is set, this is auto-generated."
+   "description": "Use {{ doc }}, {{ frappe.utils.nowdate() }}. Supports positional params {{1}}, {{2}} from Fields table above."
   },
   {
    "fieldname": "section_break_fields",
    "fieldtype": "Section Break",
-   "label": "Custom Fields"
+   "label": "Fields"
   },
   {
    "fieldname": "fields",
    "fieldtype": "Table",
    "label": "Fields",
-   "options": "SMS Message Field"
+   "options": "SMS Message Field",
+   "description": "Enter fields in the right sequence as per the template parameters."
   },
   {
    "fieldname": "property_section",
