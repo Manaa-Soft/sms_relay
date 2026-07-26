@@ -180,8 +180,9 @@ def _enqueue_sms(phone, message, device_name=None, priority="Normal", channel="S
     queue.max_retries = max_retries
     if device_name:
         queue.device = device_name
+    meta = frappe.get_meta("SMS Queue")
     for key, val in kwargs.items():
-        if queue.has_field(key):
+        if meta.get_field(key):
             queue.set(key, val)
     queue.insert(ignore_permissions=True)
     frappe.db.commit()
