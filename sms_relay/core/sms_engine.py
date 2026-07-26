@@ -171,7 +171,7 @@ def _log_sms(phone, message, status, device_name=None, gateway_message_id=None, 
     frappe.db.commit()
     return log
 
-def _enqueue_sms(phone, message, device_name=None, priority="Normal", channel="SMS", max_retries=3):
+def _enqueue_sms(phone, message, device_name=None, priority="Normal", channel="SMS", max_retries=3, **kwargs):
     queue = frappe.new_doc("SMS Queue")
     queue.recipient = phone
     queue.message = message
@@ -180,6 +180,9 @@ def _enqueue_sms(phone, message, device_name=None, priority="Normal", channel="S
     queue.max_retries = max_retries
     if device_name:
         queue.device = device_name
+    for key, val in kwargs.items():
+        if queue.has_field(key):
+            queue.set(key, val)
     queue.insert(ignore_permissions=True)
     frappe.db.commit()
     return queue

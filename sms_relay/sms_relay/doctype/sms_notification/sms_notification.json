@@ -19,17 +19,6 @@
    "in_list_view": 1
   },
   {
-   "fieldname": "disabled",
-   "fieldtype": "Check",
-   "label": "Disabled",
-   "default": 0,
-   "in_list_view": 1
-  },
-  {
-   "fieldname": "column_break_main",
-   "fieldtype": "Column Break"
-  },
-  {
    "fieldname": "notification_type",
    "fieldtype": "Select",
    "label": "Notification Type",
@@ -38,11 +27,6 @@
    "default": "DocType Event",
    "in_list_view": 1,
    "in_standard_filter": 1
-  },
-  {
-   "fieldname": "section_break_doctype",
-   "fieldtype": "Section Break",
-   "label": "Document Event"
   },
   {
    "fieldname": "reference_doctype",
@@ -58,6 +42,45 @@
    "fieldtype": "Data",
    "label": "Phone Number Field",
    "description": "Field name on the DocType that contains the phone number",
+   "mandatory_depends_on": "eval:['DocType Event'].includes(doc.notification_type)"
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "disabled",
+   "fieldtype": "Check",
+   "label": "Disabled",
+   "default": 0,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "template",
+   "fieldtype": "Link",
+   "label": "SMS Template",
+   "options": "SMS Template",
+   "reqd": 1
+  },
+  {
+   "fieldname": "code",
+   "fieldtype": "Code",
+   "label": "Preview",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_break_doctype",
+   "fieldtype": "Section Break",
+   "label": "Document Event",
+   "depends_on": "eval:doc.notification_type == 'DocType Event'"
+  },
+  {
+   "fieldname": "doctype_event",
+   "fieldtype": "Select",
+   "label": "DocType Event",
+   "options": "Before Insert\nBefore Validate\nBefore Save\nAfter Insert\nAfter Save\nBefore Submit\nAfter Submit\nBefore Cancel\nAfter Cancel\nBefore Delete\nAfter Delete\nBefore Save (Submitted Document)\nAfter Save (Submitted Document)\nDays After\nDays Before",
+   "reqd": 1,
+   "default": "After Submit",
    "mandatory_depends_on": "eval:doc.notification_type == 'DocType Event'"
   },
   {
@@ -65,13 +88,18 @@
    "fieldtype": "Column Break"
   },
   {
-   "fieldname": "doctype_event",
-   "fieldtype": "Select",
-   "label": "DocType Event",
-   "options": "Before Insert\nAfter Insert\nSave\nSubmit\nCancel\nTrash\nAfter Save\nBefore Save\nModified\nValue Changed\nScheduled Task\nBooking Created\nAuthorization",
-   "reqd": 1,
-   "default": "Submit",
-   "mandatory_depends_on": "eval:doc.notification_type == 'DocType Event'"
+   "fieldname": "days_in_advance",
+   "fieldtype": "Int",
+   "label": "Days Before or After",
+   "depends_on": "eval:['Days After','Days Before'].includes(doc.doctype_event)",
+   "mandatory_depends_on": "eval:['Days After','Days Before'].includes(doc.doctype_event)"
+  },
+  {
+   "fieldname": "date_changed",
+   "fieldtype": "Data",
+   "label": "Reference Date",
+   "depends_on": "eval:['Days After','Days Before'].includes(doc.doctype_event)",
+   "mandatory_depends_on": "eval:['Days After','Days Before'].includes(doc.doctype_event)"
   },
   {
    "fieldname": "section_break_scheduler",
@@ -82,32 +110,16 @@
   {
    "fieldname": "event_frequency",
    "fieldtype": "Select",
-   "label": "Frequency",
+   "label": "Event Frequency",
    "options": "All\nHourly\nDaily\nWeekly\nMonthly\nYearly",
    "reqd": 0,
-   "depends_on": "eval:doc.notification_type == 'Scheduler Event'"
-  },
-  {
-   "fieldname": "column_break_sched",
-   "fieldtype": "Column Break"
-  },
-  {
-   "fieldname": "send_on",
-   "fieldtype": "Datetime",
-   "label": "Send On",
-   "description": "Send at this time (for Scheduler Event)",
-   "depends_on": "eval:doc.notification_type == 'Scheduler Event'"
+   "depends_on": "eval:doc.notification_type == 'Scheduler Event'",
+   "mandatory_depends_on": "eval:doc.notification_type == 'Scheduler Event'"
   },
   {
    "fieldname": "section_break_condition",
    "fieldtype": "Section Break",
-   "label": "Condition & Template"
-  },
-  {
-   "fieldname": "template",
-   "fieldtype": "Link",
-   "label": "SMS Template",
-   "options": "SMS Template"
+   "label": "Condition & Message"
   },
   {
    "fieldname": "condition",
@@ -117,15 +129,14 @@
    "description": "Return True to send. Example: return doc.grand_total > 1000"
   },
   {
-   "fieldname": "column_break_template",
+   "fieldname": "column_break_condition",
    "fieldtype": "Column Break"
   },
   {
    "fieldname": "message_template",
    "fieldtype": "Code",
-   "label": "Message Template (Jinja / HTML)",
+   "label": "Message Template (Jinja)",
    "options": "HTML",
-   "reqd": 1,
    "description": "Use {{ doc }}, {{ frappe.utils.nowdate() }}. If Template is set, this is auto-generated."
   },
   {
@@ -140,27 +151,31 @@
    "options": "SMS Message Field"
   },
   {
-   "fieldname": "section_break_after",
+   "fieldname": "property_section",
    "fieldtype": "Section Break",
-   "label": "After Alert"
+   "label": "Set Property After Alert"
   },
   {
    "fieldname": "set_property_after_alert",
    "fieldtype": "Select",
-   "label": "Set Property After Alert",
-   "options": "None\nDocType Field"
-  },
-  {
-   "fieldname": "property_name",
-   "fieldtype": "Data",
-   "label": "Property Name",
-   "depends_on": "eval:doc.set_property_after_alert == 'DocType Field'"
+   "label": "Set Property After Alert"
   },
   {
    "fieldname": "property_value",
    "fieldtype": "Data",
-   "label": "Property Value",
-   "depends_on": "eval:doc.set_property_after_alert == 'DocType Field'"
+   "label": "Value To Be Set",
+   "depends_on": "eval:doc.set_property_after_alert"
+  },
+  {
+   "fieldname": "help_section",
+   "fieldtype": "Section Break",
+   "label": "Help"
+  },
+  {
+   "fieldname": "help_html",
+   "fieldtype": "HTML",
+   "label": "Help",
+   "options": "<h4>SMS Notification</h4>\n<p>Triggered automatically when a document event occurs or on a schedule.</p>\n<h5>DocType Event</h5>\n<p>Set <b>Phone Number Field</b> to the fieldname containing the phone number (e.g. <code>mobile_no</code>).</p>\n<p><b>Condition</b> is evaluated as a Python expression. Use <code>doc</code> to access the document.</p>\n<h5>Scheduler Event</h5>\n<p>In the Condition field, set <code>doc.set('_contact_list', ['919123456789'])</code> or <code>doc.set('_data_list', [{'name': 'INV-001', 'phone_no': '919123456789'}])</code></p>\n<h5>Template</h5>\n<p>Link to an SMS Template for pre-approved messages, or write a Jinja template in the Message Template field.</p>"
   }
  ],
  "permissions": [
