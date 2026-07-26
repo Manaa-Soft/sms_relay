@@ -141,30 +141,32 @@ def _send_android_gateway(device, phone, message, sender, queue_doc=None):
         priority_map = {"High": 100, "Normal": 0, "Low": -100}
         tier = queue_doc.priority_tier or "Normal"
         payload["priority"] = priority_map.get(tier, 0)
-    headers = {"Content-Type": "application/json"}
-    auth = None
+
+    attempts = []
     private_token = settings.get_password("private_token")
+    username = device.username or ""
+    password = device.get_password("password") or ""
+
     if private_token:
-        headers["Authorization"] = "Bearer {}".format(private_token)
-    else:
-        username = device.username or ""
-        password = device.get_password("password") or ""
-        if username:
-            auth = requests.auth.HTTPBasicAuth(username, password)
-        else:
-            frappe.log_error(
-                title="SMS Relay: No auth credentials",
-                message="Device '{}' has no username/password set and no private_token in Gateway Settings. "
-                        "SMS to {} will fail with 401.".format(device.name, phone),
-            )
-    try:
-        resp = requests.post(url, json=payload, headers=headers, auth=auth, timeout=timeout)
-        if resp.status_code in (200, 201, 202):
-            data = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
-            return {"success": True, "message_id": data.get("id") or data.get("messageId") or data.get("requestId")}
-        return {"success": False, "error": "HTTP {}: {}".format(resp.status_code, resp.text[:200])}
-    except requests.exceptions.RequestException as e:
-        return {"success": False, "error": str(e)[:200]}
+        attempts.append({"headers": {"Content-Type": "application/json", "Authorization": "Bearer {}".format(private_token)}, "auth": None})
+    if username:
+        attempts.append({"headers": {"Content-Type": "application/json"}, "auth": requests.auth.HTTPBasicAuth(username, password)})
+    if not attempts:
+        return {"success": False, "error": "No auth credentials: set device username/password or Gateway Settings private_token"}
+
+    for attempt in attempts:
+        try:
+            resp = requests.post(url, json=payload, headers=attempt["headers"], auth=attempt["auth"], timeout=timeout)
+            if resp.status_code in (200, 201, 202):
+                data = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
+                return {"success": True, "message_id": data.get("id") or data.get("messageId") or data.get("requestId")}
+            if resp.status_code == 401 and len(attempts) > 1:
+                continue
+            return {"success": False, "error": "HTTP {}: {}".format(resp.status_code, resp.text[:200])}
+        except requests.exceptions.RequestException as e:
+            return {"success": False, "error": str(e)[:200]}
+
+    return {"success": False, "error": "All auth methods failed (401 Unauthorized)"}
 
 def _send_custom_http(device, phone, message, sender):
     base_url = (device.server_url or "").rstrip("/")

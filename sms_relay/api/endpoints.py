@@ -15,12 +15,11 @@ def _get_gateway_auth(settings, device=None):
     1. Gateway Settings ``private_token`` → Bearer token (server-level)
     2. Device ``username`` / ``password`` → Basic Auth (device-level)
     """
-    headers = {}
+    headers = {"Content-Type": "application/json"}
     auth = None
     private_token = settings.get_password("private_token")
     if private_token:
         headers["Authorization"] = "Bearer {}".format(private_token)
-        return headers, auth
     if device:
         username = device.username or ""
         password = device.get_password("password") or ""
