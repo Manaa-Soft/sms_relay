@@ -2,141 +2,153 @@
 
 ## System Overview
 
-The `sms_relay` Frappe app bridges ERPNext business documents to physical Android phones for SMS delivery. It follows this pipeline:
-
-**ERPNext → sms_relay hooks → SMS Queue → Device Selection → Android Phone Gateway → Webhook delivery receipts**
+The `sms_relay` Frappe app bridges ERPNext business documents to physical Android phones (or custom HTTP SMS APIs) for SMS delivery.
 
 ```
-┌─────────────┐    ┌──────────────┐    ┌──────────────┐    ┌─────────────┐    ┌──────────────┐
-│   ERPNext   │───▶│  sms_relay   │───▶│  SMS Queue   │───▶│   Device    │───▶│   Android    │
-│  (Invoice,  │    │   Hooks      │    │  (async)     │    │  Selector   │    │    Phone     │
-│  Payment)   │    │              │    │              │    │             │    │              │
-└─────────────┘    └──────────────┘    └──────────────┘    └─────────────┘    └──────┬───────┘
-                                                                                      │
-                                                                                      ▼
-                                                                                ┌──────────────┐
-                                                                                │   Webhook    │
-                                                                                │  (delivery)  │
-                                                                                └──────────────┘
+ERPNext ──▶ hooks.py ──▶ notification_handler ──▶ SMS Queue ──▶ sms_engine ──▶ Gateway ──▶ Phone
+                                                                                │
+                                                                          webhook_receiver ◀── Delivery receipts
+```
+
+## Module Structure
+
+```
+sms_relay/sms_relay/
+├── core/
+│   ├── sms_engine.py           # Device selection, load balancing, gateway dispatch
+│   ├── notification_handler.py # Doc-event trigger listener & Jinja renderer
+│   ├── bulk_engine.py          # Batch processor & background worker queuing
+│   └── sms_utils.py            # Phone formatting (E.164), character counters, HMAC
+├── api/
+│   ├── webhook_receiver.py     # Incoming SMS & delivery status webhook
+│   └── endpoints.py            # REST APIs for external gateway sync
+├── utils/
+│   ├── jinja_methods.py        # Custom Jinja filters (money, date, clean phone)
+│   └── contact_manager.py      # Auto-linking inbound SMS to Leads/Contacts/Customers
+├── doctype/
+│   ├── sms_device/             # Enhanced: SIM slot, battery, signal, quotas
+│   ├── sms_gateway_settings/   # Enhanced: routing, rate limit, webhook secret
+│   ├── sms_log/                # Enhanced: delivery_status, delivery_at
+│   ├── sms_queue/              # Enhanced: priority_tier, target_sim
+│   ├── sms_template/           # Enhanced: language, header/footer, char counter
+│   ├── sms_opt_out/            # NEW: STOP blacklist
+│   ├── sms_bulk_message/       # NEW: Campaign manager
+│   ├── sms_bulk_recipient/     # NEW: Child table
+│   ├── sms_notification/       # NEW: Doc-triggered rules
+│   ├── sms_notification_log/   # NEW: Audit log
+│   ├── sms_outbox/             # NEW: Async retry outbox
+│   ├── sms_recipient_list/     # NEW: Saved groups
+│   ├── sms_recipient/          # NEW: Child table
+│   └── sms_message_field/      # NEW: Dynamic field mapping
+├── public/js/
+│   ├── sms_dashboard.js        # Real-time device health & stats
+│   ├── bulk_message.js         # CSV upload, progress bar, char counter
+│   └── notification_builder.js # Test/preview dialogs
+├── hooks.py
+├── tasks.py
+└── setup.py
 ```
 
 ## Data Flow
 
-### Outgoing SMS Flow (Step by Step)
+### Outgoing SMS
 
-1. User submits Sales Invoice / Payment Entry / Payment Request in ERPNext
-2. Frappe fires `doc_events` hook → calls handler (e.g. `on_invoice_submit`)
-3. Handler checks: config enabled? → gets customer phone → checks opt-out
-4. Handler renders Jinja template with document context
-5. Handler calls `_enqueue_sms()` → creates SMS Queue entry (status: Queued)
-6. Every minute, `process_sms_queue()` scheduler job picks up queued entries
-7. For each entry: `_select_device()` picks best device (priority + health + quota + throttle)
-8. `_send_to_device()` makes HTTP POST to Android SMS Gateway server
-9. Phone picks up the message and sends via SIM card
-10. SMS Log updated with status and gateway message_id
+1. User submits Sales Invoice / Payment Request / Delivery Note / Purchase Order in ERPNext
+2. Frappe fires `doc_events` hook → `notification_handler.on_doc_event()`
+3. Handler loads matching SMS Notification records for the DocType
+4. For each notification: check event match → evaluate condition → resolve phone → render Jinja template
+5. If valid: create SMS Queue entry (priority: High if payment/OTP, Normal otherwise)
+6. Every minute, `process_sms_queue()` picks up queued entries
+7. `sms_engine._select_device()` picks best device (routing strategy + quota + throttle)
+8. `_send_to_device()` makes HTTP POST to gateway
+9. Phone sends SMS via SIM card
+10. `sms_log` updated with status and `gateway_message_id`
 
-### Delivery Receipt Flow
+### Bulk SMS
+
+1. User creates SMS Bulk Message with CSV or recipient list
+2. Status set to "Draft", recipients loaded into child table
+3. On "Start Sending" or scheduler: status → "Processing"
+4. `bulk_engine.process_bulk_job()` sends batch of 10 per cycle
+5. Each recipient checked against opt-out, message resolved (text or template)
+6. SMS Queue entry created per recipient
+7. Standard queue processing takes over
+
+### Delivery Receipt
 
 1. Android phone sends delivery status to webhook URL
-2. `incoming_webhook()` receives the POST
-3. Validates HMAC signature (if configured)
-4. Updates SMS Queue and SMS Log status (Sent/Delivered/Failed)
+2. `webhook_receiver.incoming_webhook()` receives POST
+3. HMAC signature verified (if configured)
+4. Idempotency check via cache
+5. SMS Queue and SMS Log status updated
+6. If incoming SMS: Communication doc created, auto-linked to Contact/Lead
 
-## Module Architecture
+## Core Modules
 
-### Module Dependency Graph
+### sms_engine.py
 
-```
-sms_engine.py  ← handlers.py, tasks.py, api.py, webhook_receiver.py, setup.py
-    ↑
-    └── Core: phone utils, device selection, gateway HTTP, queue creation, logging, throttle, templates
-```
+| Function | Purpose |
+|---|---|
+| `send_sms()` | Main entry point, hooks into Frappe |
+| `send_sms_override()` | Monkey-patches Frappe SMS Settings |
+| `_select_device()` | Round Robin / Priority / Random routing |
+| `_check_quota()` | Daily quota check per device |
+| `_throttle_check()` | Per-device per-minute rate limit |
+| `_send_to_device()` | HTTP POST to gateway (Android or Custom) |
+| `_enqueue_sms()` | Create SMS Queue entry |
+| `_log_sms()` | Create SMS Log entry |
+| `_render_template()` | Jinja2 template rendering |
 
-### sms_engine.py (Core Engine)
+### notification_handler.py
 
-- `send_sms()` / `send_sms_override()` — Frappe hook entry points
-- `_select_device()` — priority + quota + heartbeat + throttle filtering
-- `_send_to_device()` — HTTP POST to gateway server
-- `_clean_phone()` — E.164 normalization
-- `_get_customer_phone()` — Contact chain lookup
-- `_enqueue_sms()` — Queue entry creation
-- `_log_sms()` — Audit trail creation
-- `_check_opt_out()` — Opt-out table lookup
-- `_throttle_check()` — Cache-based rate limiting
-- `_render_template()` — Jinja2 rendering
-- `_get_gateway_config()` — Cached settings reader
+| Function | Purpose |
+|---|---|
+| `on_doc_event()` | Generic dispatcher for all doc_events |
+| `_should_send()` | Evaluate Python condition via safe_eval |
+| `_render_notification()` | Render Jinja template with doc context |
+| `_get_phone_number()` | Resolve phone from field or Contact chain |
+| `_send_notification_sms()` | Create queue entry with priority |
+| `_log_notification()` | Write SMS Notification Log |
 
-### handlers.py (Document Events)
+### bulk_engine.py
 
-- `on_invoice_submit()` — Sales Invoice → SMS
-- `on_payment_submit()` — Payment Entry → SMS
-- `on_payment_request_submit()` — Payment Request → SMS
-- `_get_supplier_phone()` — Supplier contact lookup
-- `_clean_phone_from_party()` — Generic party lookup
+| Function | Purpose |
+|---|---|
+| `create_bulk_job()` | Create bulk message with CSV recipients |
+| `create_bulk_from_recipient_list()` | Load from saved Recipient List |
+| `process_bulk_job()` | Send batch of pending recipients |
+| `cancel_bulk_job()` | Cancel processing |
 
-### tasks.py (Scheduled Jobs)
+### sms_utils.py
 
-- `process_sms_queue()` — Every minute, dispatch queued SMS
-- `send_balance_reminders()` — Daily, overdue invoice reminders
-- `retry_failed_sms()` — Daily, re-enqueue failed SMS
-- `cleanup_old_logs()` — Daily, delete old logs
-- `reset_daily_quotas()` — Daily, reset device counters
-
-### webhook_receiver.py (Delivery Receipts)
-
-- `incoming_webhook()` — Public endpoint for device callbacks
-- `_handle_delivered()` / `_handle_failed()` / `_handle_sent()` / `_handle_heartbeat()`
-
-### api.py (RPC Methods)
-
-- `send_sms_now()` — Immediate send (bypasses queue)
-- `send_bulk_sms()` — Bulk enqueue from CSV
-- `get_device_health()` — Device status
-- `preview_template()` — Template rendering preview
-- `retry_sms()` — Manual retry
-- `get_sms_stats()` — Today's statistics
-
-### setup.py (Installation)
-
-- `after_install()` — Creates default settings and templates
-
-## DocTypes
-
-### SMS Gateway Settings (Singleton)
-
-Global configuration. Controls all aspects of SMS sending.
-
-### SMS Device
-
-Registered Android phone. Tracks priority, quota, heartbeat, online status.
-
-### SMS Template
-
-Jinja2 message templates. One per notification event.
-
-### SMS Queue
-
-Async message queue. Status: Queued → Sending → Sent/Delivered/Failed.
-
-### SMS Log
-
-Audit trail. Every SMS recorded with full metadata and delivery status.
+| Function | Purpose |
+|---|---|
+| `clean_phone()` | E.164 normalization |
+| `count_sms_parts()` | GSM-7/Unicode detection + segment count |
+| `verify_webhook_signature()` | HMAC-SHA256 verification |
+| `is_opted_out()` | Check opt-out blacklist |
+| `get_relay_settings()` | Cached settings loader |
 
 ## Scheduler Jobs
 
-| Frequency | Job | What it does |
+| Frequency | Job | Description |
 |---|---|---|
-| Every minute | process_sms_queue | Dispatch queued SMS to devices |
-| Daily | send_balance_reminders | Overdue invoice notifications |
-| Daily | retry_failed_sms | Re-enqueue failed SMS |
-| Daily | cleanup_old_logs | Delete logs older than retention |
-| Daily | reset_daily_quotas | Reset device sent_today counters |
+| Every minute | `process_sms_queue` | Flush queued SMS to devices |
+| Every minute | `process_outbox` | Process outbox with exponential backoff |
+| Every minute | `process_bulk_messages` | Process bulk campaign batches |
+| Hourly | `check_device_health` | Heartbeat, battery, signal checks |
+| Daily | `send_overdue_reminders` | Overdue invoice notifications |
+| Daily | `retry_failed_sms` | Re-enqueue retryable failures |
+| Daily | `cleanup_old_logs` | Purge old SMS Log entries |
+| Daily | `reset_daily_quotas` | Reset device daily counters |
 
 ## Error Handling
 
-- Gateway connection failures → logged, SMS re-queued for retry
-- Device offline → next device tried (failover)
-- Quota exhausted → device skipped
-- Throttle exceeded → device skipped
+- Gateway connection failure → logged, SMS re-queued for retry
+- Device offline → next device tried (failover if enabled)
+- Quota exhausted → device skipped, try next
+- Throttle exceeded → device skipped for this cycle
 - Max retries exceeded → SMS marked Failed permanently
-- Template render error → fallback to plain text default message
+- Template render error → logged, notification skipped
+- Opt-out detected → SMS silently skipped
+- HMAC verification failure → webhook rejected

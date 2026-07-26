@@ -1,8 +1,9 @@
 # Installation Guide
 
 ## Prerequisites
-- Frappe Framework v14+ / v15+ with bench CLI
-- ERPNext v14+ installed and configured
+
+- Frappe Framework v15+ with bench CLI
+- ERPNext v15+ installed and configured
 - MariaDB / MySQL running
 - Python 3.10+
 - Node.js 16+
@@ -12,10 +13,11 @@
 ## Step 1: Install the Android SMS Gateway
 
 ### Server Setup (Docker)
+
 ```bash
 # Clone the SMS Gateway server
-git clone https://github.com/bipin2017/sms-gateway.git
-cd sms-gateway
+git clone https://github.com/AuroraLS/android-sms-gateway.git
+cd android-sms-gateway
 
 # Create config directory
 mkdir -p config
@@ -23,35 +25,38 @@ mkdir -p config
 # Create config.yml
 cat > config.yml << 'EOF'
 server:
-  port: 3000
+  port: 8080
   auth:
     privateToken: "your-private-token-here"
   webhooks:
-    - url: "http://your-frappe-site:8080/api/method/sms_relay.webhook_receiver.incoming_webhook"
+    - url: "http://your-frappe-site:8080/api/method/sms_relay.api.webhook_receiver.incoming_webhook"
       events:
         - sms:delivered
         - sms:failed
+        - sms:received
         - system:ping
 EOF
 
 # Start the server
 docker run -d \
   --name sms-gateway \
-  -p 3000:3000 \
+  -p 8080:8080 \
   -v $(pwd)/config:/app/config \
   ghcr.io/android-sms-gateway/server:latest
 ```
 
 ### Android Phone Setup
-1. Install SMS Gateway app from GitHub Releases (use `app-insecure.apk` for HTTP)
-2. Open app → Settings → Server URL → enter `http://YOUR-SERVER-IP:3000`
-3. Enter credentials (username/password or private token)
+
+1. Install SMS Gateway app from GitHub Releases
+2. Open app → Settings → Server URL → enter `http://YOUR-SERVER-IP:8080`
+3. Enter credentials (private token)
 4. Select connection mode (Private for LAN, Cloud for internet)
 5. Phone should show "Connected" status
 
 ## Step 2: Install sms_relay App
 
 ### Option A: From GitHub (recommended)
+
 ```bash
 cd /path/to/frappe-bench
 bench get-app https://github.com/Manaa-Soft/sms_relay.git
@@ -62,6 +67,7 @@ bench restart
 ```
 
 ### Option B: From local directory
+
 ```bash
 cd /path/to/frappe-bench
 bench get-app /path/to/sms_relay
@@ -73,78 +79,92 @@ bench restart
 
 ## Step 3: Configure SMS Gateway Settings
 
-1. Go to ERPNext → Setup → SMS Gateway Settings
+1. Go to **SMS Relay → SMS Gateway Settings**
 2. Fill in:
    - Enabled: ✓
-   - Server URL: `http://YOUR-SERVER-IP:3000`
-   - API Path: `/api/3rdparty/v1/message`
-   - Username: your gateway username
-   - Password: your gateway password
-   - Send Invoice SMS: ✓
-   - Send Payment SMS: ✓
-   - Send Overdue Reminders: ✓
+   - Sender Name: Your sender label
+   - Routing Strategy: Round Robin (recommended)
+   - Enable Failover: ✓
+   - Global Rate Limit: 60
 3. Save
 
 ## Step 4: Add SMS Devices
 
-1. Go to SMS Relay → SMS Device → New
+1. Go to **SMS Relay → SMS Device → New**
 2. Fill in:
-   - Device Name: "My Phone"
-   - Device ID: (from the Android app)
-   - Connection Mode: Private
-   - SIM Number: 1
+   - Device Name: "Office Phone"
+   - Gateway URL: `http://YOUR-SERVER-IP:8080`
+   - Gateway Type: Android SMS Gateway
+   - API Key: (from the Android app settings)
+   - SIM Slot: 1
    - Priority: 0 (highest)
+   - Hourly Quota: 500
+   - Daily Quota: 5000
    - Active: ✓
-   - Daily Quota: 200
-3. Save and verify the device shows "Online"
+3. Save
 
 ## Step 5: Create SMS Templates (Optional)
 
-1. Go to SMS Relay → SMS Template → New
-2. Choose Event type
-3. Write Jinja2 template:
+1. Go to **SMS Relay → SMS Template → New**
+2. Enter template name and Jinja2 body:
+
 ```
-Dear {{ customer_name }}, your invoice {{ name }} for {{ grand_total }} is due on {{ due_date }}. Outstanding: {{ outstanding_amount }}. Thank you!
+Dear {{ doc.customer }}, your invoice {{ doc.name }} for {{ frappe.utils.fmt_money(doc.grand_total) }} is due on {{ doc.due_date }}. Please pay at your earliest convenience.
 ```
+
+3. Check the character counter — GSM-7 allows 160 chars per SMS
 4. Save
 
-## Step 6: Test
+## Step 6: Set Up Notifications (Optional)
+
+1. Go to **SMS Relay → SMS Notification → New**
+2. Configure:
+   - Reference DocType: Sales Invoice
+   - Event: On Submit
+   - Phone Field: customer_contact_person (or the field with phone)
+   - Message Template: (your Jinja template)
+   - Condition: `return doc.outstanding_amount > 0`
+3. Save
+
+## Step 7: Test
 
 ### Test Connection
-1. SMS Gateway Settings → click "Test Connection"
-2. Should show "Connection successful"
+
+```javascript
+frappe.call({
+    method: "sms_relay.api.endpoints.get_device_health",
+    callback: function(r) {
+        console.log(r.message);
+    }
+});
+```
 
 ### Test Manual SMS
-1. SMS Template → select a template → click "Send Test SMS"
-2. Enter phone number → Send
-3. Check SMS Log for delivery status
+
+```javascript
+frappe.call({
+    method: "sms_relay.api.endpoints.send_sms_now",
+    args: {
+        recipient: "+1234567890",
+        message: "Test SMS from SMS Relay!"
+    }
+});
+```
 
 ### Test Document Flow
+
 1. Create a Sales Invoice → Submit
 2. Check SMS Queue for queued entry
 3. Wait 1 minute → check SMS Log for sent status
 
-## Troubleshooting
+## Post-Installation Checklist
 
-### Phone shows "Offline"
-- Check server URL is correct
-- Check phone and server are on same network
-- Restart the Android app
-- Check Docker logs: `docker logs sms-gateway`
-
-### SMS not sending
-- Check SMS Gateway Settings → Enabled is checked
-- Check at least one SMS Device is Active and Online
-- Check daily quota not exceeded
-- Check rate limit not exceeded
-- Check SMS Log for error messages
-
-### Webhook not receiving delivery receipts
-- Check webhook URL in SMS Gateway server config.yml
-- Check firewall allows incoming connections to webhook URL
-- Check SMS Gateway Settings → Webhook Enabled is checked
-
-### Templates not rendering
-- Check template syntax (Jinja2)
-- Check variable names match the documented list
-- Use SMS Template → Preview button to test
+- [ ] SMS Gateway server running and accessible
+- [ ] Android phone connected and showing "Online"
+- [ ] SMS Gateway Settings configured and enabled
+- [ ] At least one SMS Device added and active
+- [ ] Test SMS sent and received
+- [ ] Webhook configured for delivery receipts
+- [ ] (Optional) SMS Templates created
+- [ ] (Optional) SMS Notifications configured
+- [ ] (Optional) SMS Opt Out list populated

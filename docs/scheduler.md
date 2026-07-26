@@ -1,6 +1,6 @@
 # Scheduler Jobs
 
-sms_relay registers several jobs with the Frappe scheduler. These run automatically at their configured frequencies.
+sms_relay registers jobs with the Frappe scheduler. These run automatically at their configured frequencies.
 
 ## process_sms_queue
 
@@ -9,62 +9,92 @@ sms_relay registers several jobs with the Frappe scheduler. These run automatica
 **Purpose:** Dispatches queued SMS messages to available devices.
 
 **What it does:**
-1. Checks if SMS relay is enabled in Gateway Settings
-2. Fetches up to `batch_size` (default: 10) SMS Queue entries with status "Queued"
-3. Orders by priority ASC (lowest first), then creation ASC (oldest first)
-4. For each entry:
-   a. Sets status to "Sending"
-   b. Calls `_select_device()` to find best available device
-   c. If no device available → sets back to "Queued" (tried next cycle)
-   d. Calls `_send_to_device()` → HTTP POST to gateway server
-   e. On success: sets status to "Sent", records gateway message_id, increments device counter, creates SMS Log
-   f. On failure: increments retry_count. If < max_retries → sets back to "Queued". If >= max_retries → sets to "Failed"
-5. Commits all database changes
-
-**Config values read:** `enabled`, `max_retry_count`
-
-**Side effects:**
-- Updates SMS Queue status
-- Updates SMS Device sent_today counter
-- Creates SMS Log entries
-- May log errors to Frappe error log
+1. Fetches up to 50 SMS Queue entries with status "Queued"
+2. Orders by creation ASC (oldest first)
+3. For each entry:
+   a. Validates phone number
+   b. Selects device via routing strategy (Round Robin / Priority / Random)
+   c. Checks per-minute rate limit
+   d. HTTP POST to gateway
+   e. On success: status → "Sent", creates SMS Log entry
+   f. On failure: increments retry_count. If < max_retries → status stays "Queued" with backoff. If >= max_retries → status → "Failed"
+4. Commits all database changes
 
 ---
 
-## send_balance_reminders
+## process_outbox
+
+**Frequency:** Every minute
+
+**Purpose:** Processes the SMS Outbox with exponential backoff retry.
+
+**What it does:**
+1. Fetches Outbox entries with status "Pending" or "Failed" and `next_retry_at <= now()`
+2. For each entry:
+   a. Checks max attempts not exceeded
+   b. Selects device, checks rate limit
+   c. Sends via gateway
+   d. On success: status → "Sent"
+   e. On failure: increments attempts, calculates next retry (2^attempts minutes)
+   f. If max attempts exceeded: status → "Failed"
+3. Commits changes
+
+**Backoff Schedule:**
+| Attempt | Wait Before Next |
+|---|---|
+| 1 | 1 minute |
+| 2 | 2 minutes |
+| 3 | 4 minutes |
+| 4 | 8 minutes |
+| 5 | 16 minutes |
+
+---
+
+## process_bulk_messages
+
+**Frequency:** Every minute
+
+**Purpose:** Processes bulk SMS campaigns in batches.
+
+**What it does:**
+1. Finds Bulk Messages with status "Draft" or "Processing"
+2. For each bulk:
+   a. If Draft → set status to "Processing", record start time
+   b. Take next 10 pending recipients
+   c. For each: check opt-out, resolve message, create queue entry
+   d. Update sent/failed/pending counts
+   e. If no pending recipients → set status to "Completed"
+3. Commits changes
+
+---
+
+## check_device_health
+
+**Frequency:** Hourly
+
+**Purpose:** Checks device heartbeat, battery status, and signal strength.
+
+**What it does:**
+1. For each enabled device:
+   a. GET request to `{gateway_url}/api/device`
+   b. Update battery_level, signal_strength, is_active
+   c. If unreachable → set is_active = 0
+
+---
+
+## send_overdue_reminders
 
 **Frequency:** Daily
 
-**Purpose:** Sends overdue invoice payment reminder SMS to customers.
+**Purpose:** Sends overdue invoice payment reminder SMS.
 
 **What it does:**
-1. Checks if enabled and `send_overdue_reminders` is on
-2. Parses `reminder_intervals` (e.g. "7,14,30,60,90") into a list of integers
-3. Fetches all overdue Sales Invoices (status=Overdue, outstanding > 0, submitted)
-4. Groups invoices by customer
-5. For each customer:
-   a. Finds earliest due date across their invoices
-   b. Calculates days_overdue from today
-   c. Checks if days_overdue matches any configured interval
-   d. If match → gets customer phone, checks opt-out
-   e. Calculates total outstanding across all overdue invoices
-   f. Renders template or uses default message
-   g. Enqueues SMS with priority 3 (low)
-6. Commits all database changes
-
-**Config values read:** `enabled`, `send_overdue_reminders`, `reminder_intervals`, `overdue_template`
-
-**Side effects:**
-- Creates SMS Queue entries
-- Groups by customer to prevent duplicate reminders on the same day
-
-**Example flow:**
-- Today: 2026-07-26
-- Invoice SINV-001: due_date=2026-07-19, outstanding=5000
-- Invoice SINV-002: due_date=2026-07-12, outstanding=3000
-- Both for customer "ABC Corp"
-- Earliest due: 2026-07-12 → days_overdue = 14
-- Interval 14 matches → sends reminder for both invoices (total: 8000)
+1. Fetches submitted Sales Invoices with outstanding > 0 and due_date < today
+2. For each invoice:
+   a. Gets customer phone from Contact chain
+   b. Checks opt-out list
+   c. Creates queue entry with message: "Dear {customer}, invoice {name} of {amount} is overdue (due {date}). Outstanding: {outstanding}. Please pay soon."
+3. Commits changes
 
 ---
 
@@ -72,18 +102,12 @@ sms_relay registers several jobs with the Frappe scheduler. These run automatica
 
 **Frequency:** Daily
 
-**Purpose:** Re-enqueues SMS that failed but haven't exhausted retry attempts.
+**Purpose:** Re-enqueues SMS that failed but haven't exhausted retries.
 
 **What it does:**
-1. Fetches SMS Queue entries where status="Failed" AND retry_count < max_retries
-2. Sets status back to "Queued" for each
-3. Logs the count of re-enqueued entries
-4. Commits changes
-
-**Config values read:** `max_retry_count`
-
-**Side effects:**
-- Changes SMS Queue status from "Failed" to "Queued"
+1. Finds Queue entries with status "Failed" and retry_count < max_retries
+2. Sets status back to "Queued" with incremented retry_count
+3. Commits changes
 
 ---
 
@@ -91,19 +115,12 @@ sms_relay registers several jobs with the Frappe scheduler. These run automatica
 
 **Frequency:** Daily
 
-**Purpose:** Deletes SMS Log entries older than the configured retention period.
+**Purpose:** Deletes old SMS Log entries (retention: 90 days).
 
 **What it does:**
-1. Calculates cutoff date: today - `log_retention` days (default: 90)
+1. Calculates cutoff: today - 90 days
 2. Deletes all SMS Log entries created before cutoff
-3. Logs the cleanup action
-
-**Config values read:** `log_retention` (days)
-
-**Side effects:**
-- Permanent deletion of old SMS Log records
-
-**Note:** This is irreversible. Adjust `log_retention` in SMS Gateway Settings if you need longer history.
+3. Commits changes
 
 ---
 
@@ -111,39 +128,41 @@ sms_relay registers several jobs with the Frappe scheduler. These run automatica
 
 **Frequency:** Daily
 
-**Purpose:** Resets the `sent_today` counter on all SMS Devices.
+**Purpose:** Resets daily counters on all devices.
 
 **What it does:**
-1. Runs `UPDATE tabSMS Device SET sent_today = 0`
+1. Sets sent_today = 0 on all SMS Device records
 2. Commits changes
-3. Logs the reset action
 
-**Side effects:**
-- All devices get fresh daily quotas
+---
 
 ## Scheduler Configuration
-
-Frappe's scheduler runs these jobs based on their registration in `hooks.py`:
 
 ```python
 scheduler_events = {
     "all": [
-        "sms_relay.tasks.process_sms_queue",      # Every ~3 minutes (Frappe "all" interval)
+        "sms_relay.tasks.process_sms_queue",
+        "sms_relay.tasks.process_outbox",
+        "sms_relay.tasks.process_bulk_messages",
+    ],
+    "hourly": [
+        "sms_relay.tasks.check_device_health",
     ],
     "daily": [
-        "sms_relay.tasks.send_balance_reminders",  # Once per day
-        "sms_relay.tasks.retry_failed_sms",        # Once per day
-        "sms_relay.tasks.cleanup_old_logs",        # Once per day
-        "sms_relay.tasks.reset_daily_quotas",      # Once per day
+        "sms_relay.tasks.send_overdue_reminders",
+        "sms_relay.tasks.retry_failed_sms",
+        "sms_relay.tasks.cleanup_old_logs",
+        "sms_relay.tasks.reset_daily_quotas",
     ],
 }
 ```
 
-**Note:** The `"all"` scheduler event in Frappe runs approximately every 3 minutes (not every minute as the name might suggest). If you need more frequent processing, consider using `hooks.py` with `"all"` plus a custom scheduler, or use `frappe.enqueue` with a longer-running worker.
+**Note:** Frappe's `"all"` scheduler runs approximately every 1-3 minutes.
 
 ## Monitoring
 
-- Check **SMS Queue** list for entries with status "Failed" (need attention)
-- Check **SMS Log** list for delivery status history
-- Check Frappe **Error Log** for scheduler errors
-- Use `sms_relay.api.get_sms_stats` for daily statistics
+- **SMS Queue** list: check for "Failed" entries needing attention
+- **SMS Log** list: delivery status history
+- **SMS Bulk Message** list: campaign progress
+- **Error Log**: scheduler errors (search "SMS Relay")
+- **SMS Dashboard**: real-time device health and stats
