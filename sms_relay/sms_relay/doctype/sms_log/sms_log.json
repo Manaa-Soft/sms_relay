@@ -39,7 +39,7 @@
    "fieldname": "status",
    "fieldtype": "Select",
    "label": "Status",
-   "options": "Pending\nQueued\nSending\nSent\nDelivered\nFailed\nRetrying",
+    "options": "Pending\nQueued\nSending\nSent\nDelivered\nFailed\nRetrying\nCancelled",
    "default": "Queued",
    "read_only": 1,
    "in_list_view": 1
@@ -106,12 +106,25 @@
    "options": "SMS Device",
    "read_only": 1
   },
-  {
-   "fieldname": "sim_number",
-   "fieldtype": "Int",
-   "label": "SIM",
-   "read_only": 1
-  },
+   {
+    "fieldname": "sim_number",
+    "fieldtype": "Int",
+    "label": "SIM",
+    "read_only": 1
+   },
+   {
+    "fieldname": "device_id",
+    "fieldtype": "Data",
+    "label": "Device ID",
+    "read_only": 1
+   },
+   {
+    "fieldname": "message_id",
+    "fieldtype": "Data",
+    "label": "Message ID",
+    "read_only": 1,
+    "description": "Client-supplied ID for idempotency"
+   },
   {
    "fieldname": "section_timing",
    "fieldtype": "Section Break",
@@ -129,12 +142,18 @@
    "label": "Sent At",
    "read_only": 1
   },
-  {
-   "fieldname": "delivered_at",
-   "fieldtype": "Datetime",
-   "label": "Delivered At",
-   "read_only": 1
-  },
+   {
+    "fieldname": "delivered_at",
+    "fieldtype": "Datetime",
+    "label": "Delivered At",
+    "read_only": 1
+   },
+   {
+    "fieldname": "cancelled_at",
+    "fieldtype": "Datetime",
+    "label": "Cancelled At",
+    "read_only": 1
+   },
   {
    "fieldname": "section_debug",
    "fieldtype": "Section Break",

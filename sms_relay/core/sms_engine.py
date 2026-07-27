@@ -11,7 +11,7 @@ from sms_relay.core.sms_utils import (
     validate_phone_list,
 )
 
-def send_sms(receiver_list, msg, sender="", **kwargs):
+def send_sms(receiver_list, msg, sender="", message_id=None, ttl_seconds=None, valid_until=None, schedule_at=None, **kwargs):
     settings = get_relay_settings()
     if not sender:
         sender = settings.get("sender_name") or ""
@@ -32,9 +32,10 @@ def send_sms(receiver_list, msg, sender="", **kwargs):
             continue
         result = _send_to_device(device, phone, msg, sender)
         if result.get("success"):
-            _log_sms(phone, msg, "Sent", device_name=device, gateway_message_id=result.get("message_id"))
+            _log_sms(phone, msg, "Sent", device_name=device, gateway_message_id=result.get("message_id"), message_id=message_id)
         else:
-            _enqueue_sms(phone, msg, device, priority="Normal")
+            _enqueue_sms(phone, msg, device, priority="Normal", message_id=message_id,
+                         ttl_seconds=ttl_seconds, valid_until=valid_until, scheduled_at=schedule_at)
 
 def send_sms_override(recipient, message, sender=None, **kwargs):
     if isinstance(recipient, str):
@@ -117,11 +118,32 @@ def _throttle_check(device_name):
 def _send_to_device(device_name, phone, message, sender="", queue_doc=None):
     device = frappe.get_doc("SMS Device", device_name)
     if device.gateway_type == "Android SMS Gateway":
-        return _send_android_gateway(device, phone, message, sender, queue_doc=queue_doc)
+        result = _send_android_gateway(device, phone, message, sender, queue_doc=queue_doc)
     else:
-        return _send_custom_http(device, phone, message, sender)
+        result = _send_custom_http(device, phone, message, sender)
+
+    # Send interval delay
+    if result.get("success"):
+        settings = get_relay_settings()
+        min_delay = cint(settings.get("send_interval_min")) or 0
+        max_delay = cint(settings.get("send_interval_max")) or 0
+        if min_delay > 0 or max_delay > 0:
+            import time, random
+            delay = random.uniform(min_delay, max_delay)
+            time.sleep(delay)
+
+    return result
 
 def _send_android_gateway(device, phone, message, sender, queue_doc=None):
+    # Idempotency: skip if message_id already sent
+    if queue_doc and queue_doc.message_id:
+        existing = frappe.db.exists("SMS Log", {
+            "message_id": queue_doc.message_id,
+            "status": "Sent"
+        })
+        if existing:
+            return {"success": True, "message_id": queue_doc.message_id}
+
     base_url = (device.server_url or "").rstrip("/")
     if not base_url:
         return {"success": False, "error": "No server URL configured on device"}
@@ -172,13 +194,17 @@ def _send_custom_http(device, phone, message, sender):
     except requests.exceptions.RequestException as e:
         return {"success": False, "error": str(e)[:200]}
 
-def _log_sms(phone, message, status, device_name=None, gateway_message_id=None, error=None):
+def _log_sms(phone, message, status, device_name=None, gateway_message_id=None, error=None, message_id=None, device_id=None):
     log = frappe.new_doc("SMS Log")
     log.phone = phone
     log.message = message
     log.status = status
     if device_name:
         log.device = device_name
+    if device_id:
+        log.device_id = device_id
+    if message_id:
+        log.message_id = message_id
     log.gateway_message_id = gateway_message_id
     if error:
         log.error_message = error
@@ -186,7 +212,7 @@ def _log_sms(phone, message, status, device_name=None, gateway_message_id=None, 
     frappe.db.commit()
     return log
 
-def _enqueue_sms(phone, message, device_name=None, priority="Normal", channel="SMS", max_retries=3, **kwargs):
+def _enqueue_sms(phone, message, device_name=None, priority="Normal", channel="SMS", max_retries=3, message_id=None, ttl_seconds=None, valid_until=None, **kwargs):
     queue = frappe.new_doc("SMS Queue")
     queue.recipient = phone
     queue.message = message
@@ -195,6 +221,12 @@ def _enqueue_sms(phone, message, device_name=None, priority="Normal", channel="S
     queue.max_retries = max_retries
     if device_name:
         queue.device = device_name
+    if message_id:
+        queue.message_id = message_id
+    if ttl_seconds:
+        queue.ttl_seconds = ttl_seconds
+    if valid_until:
+        queue.valid_until = valid_until
     meta = frappe.get_meta("SMS Queue")
     for key, val in kwargs.items():
         if meta.get_field(key):
@@ -227,6 +259,22 @@ def _get_supplier_phone(supplier):
     if phone:
         return clean_phone(phone)
     return None
+
+def cancel_message(queue_name):
+    """Cancel a queued SMS message before it is sent."""
+    queue = frappe.get_doc("SMS Queue", queue_name)
+    if queue.status not in ("Queued",):
+        frappe.throw(_("Only queued messages can be cancelled"))
+    from frappe.utils import now_datetime
+    queue.status = "Cancelled"
+    queue.cancelled_at = now_datetime()
+    queue.save(ignore_permissions=True)
+    frappe.db.commit()
+
+    # Log the cancellation
+    _log_sms(queue.recipient, queue.message, "Cancelled", device_name=queue.device)
+
+    return {"status": "cancelled", "name": queue.name}
 
 def _render_template(template_name, context):
     template = frappe.get_doc("SMS Template", template_name)
