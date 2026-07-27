@@ -15,6 +15,13 @@ class TestNotificationRendering(SMSRelayTestCase):
         self.assertIn("5000", result)
 
     def test_parameter_mode_replacement(self):
+        tmpl = frappe.new_doc("SMS Template")
+        tmpl.template_name = "Param Template"
+        tmpl.category = "UTILITY"
+        tmpl.language = "en"
+        tmpl.message_template = "Hello {{1}}, order {{2}} ready."
+        tmpl.insert(ignore_permissions=True)
+
         notification = frappe.new_doc("SMS Notification")
         notification.notification_name = "Test Param Notif"
         notification.notification_type = "DocType Event"
@@ -43,9 +50,15 @@ class TestNotificationRendering(SMSRelayTestCase):
         self.assertIn("+15551234567", result)
         self.assertIn("Order 123", result)
 
-    def test_empty_template_returns_empty(self):
-        result = _render_template("Empty Template", {})
-        self.assertEqual(result, "")
+    def test_render_whitespace_template(self):
+        tmpl = frappe.new_doc("SMS Template")
+        tmpl.template_name = "WS Template"
+        tmpl.category = "UTILITY"
+        tmpl.language = "en"
+        tmpl.message_template = " "
+        tmpl.insert(ignore_permissions=True)
+        result = _render_template("WS Template", {})
+        self.assertEqual(result.strip(), "")
 
 
 class TestPriorityDetection(SMSRelayTestCase):

@@ -61,17 +61,3 @@ class SMSRelayTestCase(IntegrationTestCase):
             tmpl.language = "en"
             tmpl.message_template = "Hello {{ doc.customer }}, your total is {{ doc.grand_total }}."
             tmpl.insert(ignore_permissions=True)
-        if not frappe.db.exists("SMS Template", {"template_name": "Empty Template"}):
-            tmpl = frappe.new_doc("SMS Template")
-            tmpl.template_name = "Empty Template"
-            tmpl.category = "UTILITY"
-            tmpl.language = "en"
-            tmpl.message_template = ""
-            tmpl.insert(ignore_permissions=True)
-        if not frappe.db.exists("SMS Template", {"template_name": "Param Template"}):
-            tmpl = frappe.new_doc("SMS Template")
-            tmpl.template_name = "Param Template"
-            tmpl.category = "UTILITY"
-            tmpl.language = "en"
-            tmpl.message_template = "Hello {{1}}, order {{2}} ready."
-            tmpl.insert(ignore_permissions=True)

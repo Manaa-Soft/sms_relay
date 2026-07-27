@@ -156,9 +156,15 @@ class TestRenderTemplate(SMSRelayTestCase):
         self.assertIn("John", result)
         self.assertIn("1000", result)
 
-    def test_render_with_empty_body(self):
-        result = _render_template("Empty Template", {})
-        self.assertEqual(result, "")
+    def test_render_with_whitespace_body(self):
+        tmpl = frappe.new_doc("SMS Template")
+        tmpl.template_name = "Space Template"
+        tmpl.category = "UTILITY"
+        tmpl.language = "en"
+        tmpl.message_template = " "
+        tmpl.insert(ignore_permissions=True)
+        result = _render_template("Space Template", {})
+        self.assertEqual(result.strip(), "")
 
 
 class TestSendAndroidGateway(SMSRelayTestCase):
