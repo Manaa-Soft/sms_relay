@@ -33,7 +33,7 @@ class SMSRelayTestCase(IntegrationTestCase):
 
     def _setup_device(self):
         if frappe.db.exists("SMS Device", "Test Phone 2"):
-            frappe.db.delete("SMS Device", "Test Phone 2", ignore_permissions=True)
+            frappe.db.sql("DELETE FROM `tabSMS Device` WHERE name = %s", "Test Phone 2")
         if not frappe.db.exists("SMS Device", "Test Phone"):
             device = frappe.new_doc("SMS Device")
             device.device_name = "Test Phone"
