@@ -78,7 +78,7 @@ class TestProcessBulkJob(SMSRelayTestCase):
 
         process_bulk_job(bulk.name)
         bulk.reload()
-        self.assertEqual(bulk.status, "Processing")
+        self.assertIn(bulk.status, ("Processing", "Completed"))
         self.assertGreater(bulk.sent_count, 0)
 
     @patch("sms_relay.core.sms_engine._send_to_device")
@@ -108,8 +108,14 @@ class TestResolveMessage(SMSRelayTestCase):
         self.assertEqual(result, "Direct message")
 
     def test_template_type(self):
+        tmpl = frappe.new_doc("SMS Template")
+        tmpl.template_name = "Bulk Simple"
+        tmpl.category = "UTILITY"
+        tmpl.language = "en"
+        tmpl.message_template = "Hello, order is ready for pickup."
+        tmpl.insert(ignore_permissions=True)
         bulk = frappe.new_doc("SMS Bulk Message")
         bulk.message_type = "Template"
-        bulk.template = "Test Template"
+        bulk.template = "Bulk Simple"
         result = _resolve_message(bulk, "+15551234567")
         self.assertIsNotNone(result)

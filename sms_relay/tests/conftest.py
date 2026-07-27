@@ -32,6 +32,8 @@ class SMSRelayTestCase(IntegrationTestCase):
         settings.save(ignore_permissions=True)
 
     def _setup_device(self):
+        if frappe.db.exists("SMS Device", "Test Phone 2"):
+            frappe.db.delete("SMS Device", "Test Phone 2", ignore_permissions=True)
         if not frappe.db.exists("SMS Device", "Test Phone"):
             device = frappe.new_doc("SMS Device")
             device.device_name = "Test Phone"
@@ -51,6 +53,8 @@ class SMSRelayTestCase(IntegrationTestCase):
                 "is_online": 1,
                 "daily_quota": 200,
                 "hourly_quota": 500,
+                "server_url": "http://localhost:8085",
+                "username": "test_user",
             })
 
     def _setup_template(self):

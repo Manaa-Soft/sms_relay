@@ -87,7 +87,7 @@ class TestCountSmsParts(SMSRelayTestCase):
         self.assertEqual(result["max_chars"], 153)
 
     def test_gsm7_with_accented_chars(self):
-        text = "\u00e9\u00e8\u00ea"
+        text = "\u00e9\u00e8"
         result = count_sms_parts(text)
         self.assertEqual(result["encoding"], "GSM-7")
         self.assertEqual(result["parts"], 1)

@@ -163,7 +163,13 @@ class TestPreviewTemplate(SMSRelayTestCase):
         self.assertIn("sms_info", result)
 
     def test_preview_with_template(self):
-        result = preview_template(template_name="Test Template")
+        tmpl = frappe.new_doc("SMS Template")
+        tmpl.template_name = "Simple Preview"
+        tmpl.category = "UTILITY"
+        tmpl.language = "en"
+        tmpl.message_template = "Hello, this is a simple message."
+        tmpl.insert(ignore_permissions=True)
+        result = preview_template(template_name="Simple Preview")
         self.assertIn("message", result)
 
 

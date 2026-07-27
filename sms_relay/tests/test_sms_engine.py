@@ -161,7 +161,7 @@ class TestRenderTemplate(SMSRelayTestCase):
         tmpl.template_name = "Space Template"
         tmpl.category = "UTILITY"
         tmpl.language = "en"
-        tmpl.message_template = " "
+        tmpl.message_template = "     "
         tmpl.insert(ignore_permissions=True)
         result = _render_template("Space Template", {})
         self.assertEqual(result.strip(), "")
@@ -215,7 +215,10 @@ class TestSendAndroidGateway(SMSRelayTestCase):
         self.assertIn("No server URL", result["error"])
 
     def test_no_username(self):
-        frappe.db.set_value("SMS Device", "Test Phone", "username", "")
+        frappe.db.set_value("SMS Device", "Test Phone", {
+            "server_url": "http://localhost:8085",
+            "username": "",
+        })
         frappe.db.commit()
         device = frappe.get_doc("SMS Device", "Test Phone")
         result = _send_android_gateway(device, "+15551234567", "Test message", "")

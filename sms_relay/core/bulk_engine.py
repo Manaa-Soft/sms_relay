@@ -97,6 +97,13 @@ def process_bulk_job(bulk_name):
         bulk.pending_count = cint(bulk.pending_count) - 1
     bulk.save(ignore_permissions=True)
     frappe.db.commit()
+    still_pending = [r for r in bulk.recipients if r.status == "Pending"]
+    if not still_pending:
+        bulk.reload()
+        bulk.status = "Completed"
+        bulk.completed_at = now()
+        bulk.save(ignore_permissions=True)
+        frappe.db.commit()
 
 def _resolve_message(bulk, phone):
     if bulk.message_type == "Text":

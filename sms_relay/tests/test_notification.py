@@ -26,7 +26,7 @@ class TestNotificationRendering(SMSRelayTestCase):
         notification.notification_name = "Test Param Notif"
         notification.notification_type = "DocType Event"
         notification.reference_doctype = "SMS Queue"
-        notification.doctype_event = "On Save"
+        notification.doctype_event = "After Save"
         notification.template_type = "Parameter"
         notification.template = "Param Template"
         notification.field_name = "recipient"
@@ -55,7 +55,7 @@ class TestNotificationRendering(SMSRelayTestCase):
         tmpl.template_name = "WS Template"
         tmpl.category = "UTILITY"
         tmpl.language = "en"
-        tmpl.message_template = " "
+        tmpl.message_template = "     "
         tmpl.insert(ignore_permissions=True)
         result = _render_template("WS Template", {})
         self.assertEqual(result.strip(), "")
