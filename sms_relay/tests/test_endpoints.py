@@ -1,7 +1,7 @@
 import json
 import frappe
 from unittest.mock import patch, MagicMock
-from frappe.tests import IntegrationTestCase
+from sms_relay.tests.conftest import SMSRelayTestCase
 from sms_relay.api.endpoints import (
     test_connection,
     connect_device,
@@ -18,7 +18,7 @@ from sms_relay.api.endpoints import (
 )
 
 
-class TestSendSmsNow(IntegrationTestCase):
+class TestSendSmsNow(SMSRelayTestCase):
     """Test the send_sms_now endpoint."""
 
     @patch("sms_relay.core.sms_engine._send_to_device")
@@ -63,7 +63,7 @@ class TestSendSmsNow(IntegrationTestCase):
         self.assertEqual(queue.ttl_seconds, 3600)
 
 
-class TestCancelMessageEndpoint(IntegrationTestCase):
+class TestCancelMessageEndpoint(SMSRelayTestCase):
     """Test the cancel_message endpoint."""
 
     def test_cancel_queued(self):
@@ -82,7 +82,7 @@ class TestCancelMessageEndpoint(IntegrationTestCase):
             cancel_message()
 
 
-class TestGetMessageHistory(IntegrationTestCase):
+class TestGetMessageHistory(SMSRelayTestCase):
     """Test message history endpoint."""
 
     def test_returns_logs(self):
@@ -105,7 +105,7 @@ class TestGetMessageHistory(IntegrationTestCase):
         self.assertIn("messages", result)
 
 
-class TestGetInbox(IntegrationTestCase):
+class TestGetInbox(SMSRelayTestCase):
     """Test inbox endpoint."""
 
     def test_returns_received(self):
@@ -120,7 +120,7 @@ class TestGetInbox(IntegrationTestCase):
         self.assertIn("messages", result)
 
 
-class TestGetDeviceHealth(IntegrationTestCase):
+class TestGetDeviceHealth(SMSRelayTestCase):
     """Test device health endpoint."""
 
     def test_returns_device_list(self):
@@ -131,7 +131,7 @@ class TestGetDeviceHealth(IntegrationTestCase):
         self.assertIn("sent_today", result[0])
 
 
-class TestGetStructuredHealth(IntegrationTestCase):
+class TestGetStructuredHealth(SMSRelayTestCase):
     """Test structured health endpoint."""
 
     def test_returns_structure(self):
@@ -143,7 +143,7 @@ class TestGetStructuredHealth(IntegrationTestCase):
         self.assertIn(result["status"], ["pass", "warn", "fail"])
 
 
-class TestGetSmsStats(IntegrationTestCase):
+class TestGetSmsStats(SMSRelayTestCase):
     """Test SMS stats endpoint."""
 
     def test_returns_stats(self):
@@ -154,7 +154,7 @@ class TestGetSmsStats(IntegrationTestCase):
         self.assertIn("total_devices", result)
 
 
-class TestPreviewTemplate(IntegrationTestCase):
+class TestPreviewTemplate(SMSRelayTestCase):
     """Test template preview endpoint."""
 
     def test_preview_with_text(self):
@@ -167,7 +167,7 @@ class TestPreviewTemplate(IntegrationTestCase):
         self.assertIn("message", result)
 
 
-class TestRetrySms(IntegrationTestCase):
+class TestRetrySms(SMSRelayTestCase):
     """Test retry endpoint."""
 
     def test_retry_failed(self):
@@ -186,7 +186,7 @@ class TestRetrySms(IntegrationTestCase):
             retry_sms()
 
 
-class TestTestConnection(IntegrationTestCase):
+class TestTestConnection(SMSRelayTestCase):
     """Test connection endpoint."""
 
     @patch("sms_relay.api.endpoints.requests.get")
@@ -214,7 +214,7 @@ class TestTestConnection(IntegrationTestCase):
         self.assertFalse(result["success"])
 
 
-class TestConnectDevice(IntegrationTestCase):
+class TestConnectDevice(SMSRelayTestCase):
     """Test connect_device endpoint."""
 
     @patch("sms_relay.api.endpoints.requests.get")

@@ -1,5 +1,6 @@
 import frappe
-from frappe.tests import IntegrationTestCase
+from unittest.mock import patch
+from sms_relay.tests.conftest import SMSRelayTestCase
 from sms_relay.core.bulk_engine import (
     create_bulk_job,
     process_bulk_job,
@@ -8,7 +9,7 @@ from sms_relay.core.bulk_engine import (
 )
 
 
-class TestCreateBulkJob(IntegrationTestCase):
+class TestCreateBulkJob(SMSRelayTestCase):
     """Test bulk job creation."""
 
     def test_create_text_bulk(self):
@@ -40,7 +41,7 @@ class TestCreateBulkJob(IntegrationTestCase):
             create_bulk_job(message_type="Template")
 
 
-class TestLoadCsvRecipients(IntegrationTestCase):
+class TestLoadCsvRecipients(SMSRelayTestCase):
     """Test CSV parsing."""
 
     def test_standard_csv(self):
@@ -61,10 +62,12 @@ class TestLoadCsvRecipients(IntegrationTestCase):
         self.assertEqual(len(bulk.recipients), 1)
 
 
-class TestProcessBulkJob(IntegrationTestCase):
+class TestProcessBulkJob(SMSRelayTestCase):
     """Test bulk job processing."""
 
-    def test_processes_batch(self):
+    @patch("sms_relay.core.sms_engine._send_to_device")
+    def test_processes_batch(self, mock_send):
+        mock_send.return_value = {"success": True, "message_id": "gw-001"}
         csv_data = "phone,name\n+15551111111,John\n+15552222222,Jane\n+15553333333,Bob"
         bulk = create_bulk_job(
             message_type="Text",
@@ -78,7 +81,9 @@ class TestProcessBulkJob(IntegrationTestCase):
         self.assertEqual(bulk.status, "Processing")
         self.assertGreater(bulk.sent_count, 0)
 
-    def test_completes_when_all_sent(self):
+    @patch("sms_relay.core.sms_engine._send_to_device")
+    def test_completes_when_all_sent(self, mock_send):
+        mock_send.return_value = {"success": True, "message_id": "gw-001"}
         csv_data = "phone\n+15551111111"
         bulk = create_bulk_job(
             message_type="Text",
@@ -92,7 +97,7 @@ class TestProcessBulkJob(IntegrationTestCase):
         self.assertEqual(bulk.status, "Completed")
 
 
-class TestResolveMessage(IntegrationTestCase):
+class TestResolveMessage(SMSRelayTestCase):
     """Test message resolution."""
 
     def test_text_type(self):

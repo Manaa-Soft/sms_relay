@@ -108,13 +108,13 @@ def _resolve_message(bulk, phone):
 
 def _enqueue_bulk_sms(phone, message, account=None):
     queue = frappe.new_doc("SMS Queue")
-    queue.phone_number = phone
+    queue.recipient = phone
     queue.message = message
     queue.status = "Queued"
     queue.priority_tier = "Normal"
     queue.max_retries = 3
     if account:
-        queue.device_name = account
+        queue.device = account
     queue.insert(ignore_permissions=True)
     frappe.db.commit()
     return queue

@@ -1,6 +1,6 @@
 import frappe
 from unittest.mock import patch, MagicMock
-from frappe.tests import IntegrationTestCase
+from sms_relay.tests.conftest import SMSRelayTestCase
 from sms_relay.core.sms_engine import (
     _select_device,
     _select_device_round_robin,
@@ -15,7 +15,7 @@ from sms_relay.core.sms_engine import (
 )
 
 
-class TestDeviceSelection(IntegrationTestCase):
+class TestDeviceSelection(SMSRelayTestCase):
     """Test device routing strategies."""
 
     def _create_second_device(self):
@@ -73,7 +73,7 @@ class TestDeviceSelection(IntegrationTestCase):
         self.assertEqual(result, "Test Phone 2")
 
 
-class TestQuotaAndThrottle(IntegrationTestCase):
+class TestQuotaAndThrottle(SMSRelayTestCase):
     """Test quota checking and rate limiting."""
 
     def test_check_quota_within_limit(self):
@@ -84,7 +84,7 @@ class TestQuotaAndThrottle(IntegrationTestCase):
         self.assertTrue(_throttle_check("Test Phone"))
 
 
-class TestLogAndEnqueue(IntegrationTestCase):
+class TestLogAndEnqueue(SMSRelayTestCase):
     """Test SMS logging and queueing."""
 
     def test_log_sms_creates_entry(self):
@@ -126,7 +126,7 @@ class TestLogAndEnqueue(IntegrationTestCase):
         self.assertIsNotNone(queue.valid_until)
 
 
-class TestCancelMessage(IntegrationTestCase):
+class TestCancelMessage(SMSRelayTestCase):
     """Test message cancellation."""
 
     def test_cancel_queued_message(self):
@@ -148,26 +148,20 @@ class TestCancelMessage(IntegrationTestCase):
             cancel_message(queue.name)
 
 
-class TestRenderTemplate(IntegrationTestCase):
+class TestRenderTemplate(SMSRelayTestCase):
     """Test Jinja template rendering."""
 
     def test_basic_render(self):
-        tmpl = frappe.get_doc("SMS Template", "Test Template")
         result = _render_template("Test Template", {"doc": {"customer": "John", "grand_total": 1000}})
         self.assertIn("John", result)
         self.assertIn("1000", result)
 
     def test_render_with_empty_body(self):
-        if not frappe.db.exists("SMS Template", "Empty Template"):
-            tmpl = frappe.new_doc("SMS Template")
-            tmpl.template_name = "Empty Template"
-            tmpl.message_template = ""
-            tmpl.insert(ignore_permissions=True)
         result = _render_template("Empty Template", {})
         self.assertEqual(result, "")
 
 
-class TestSendAndroidGateway(IntegrationTestCase):
+class TestSendAndroidGateway(SMSRelayTestCase):
     """Test Android gateway dispatch with mocking."""
 
     @patch("sms_relay.core.sms_engine.requests.post")

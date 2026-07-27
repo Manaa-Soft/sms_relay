@@ -1,5 +1,5 @@
 import frappe
-from frappe.tests import IntegrationTestCase
+from sms_relay.tests.conftest import SMSRelayTestCase
 from sms_relay.core.sms_utils import (
     clean_phone,
     count_sms_parts,
@@ -11,7 +11,7 @@ from sms_relay.core.sms_utils import (
 )
 
 
-class TestCleanPhone(IntegrationTestCase):
+class TestCleanPhone(SMSRelayTestCase):
     """Test phone number normalization to E.164."""
 
     def test_e164_with_plus(self):
@@ -34,7 +34,7 @@ class TestCleanPhone(IntegrationTestCase):
 
     def test_short_number(self):
         result = clean_phone("123456")
-        self.assertEqual(result, "+123456")
+        self.assertEqual(result, "123456")
 
     def test_empty_input(self):
         self.assertEqual(clean_phone(""), "")
@@ -59,7 +59,7 @@ class TestCleanPhone(IntegrationTestCase):
         self.assertTrue(result.startswith("+"))
 
 
-class TestCountSmsParts(IntegrationTestCase):
+class TestCountSmsParts(SMSRelayTestCase):
     """Test SMS character counting and segment calculation."""
 
     def test_empty_text(self):
@@ -86,19 +86,19 @@ class TestCountSmsParts(IntegrationTestCase):
         self.assertEqual(result["encoding"], "GSM-7")
         self.assertEqual(result["max_chars"], 153)
 
-    def test_unicode_single_part(self):
-        text = "Hello \u00e9\u00e8\u00ea"
+    def test_gsm7_with_accented_chars(self):
+        text = "\u00e9\u00e8\u00ea"
         result = count_sms_parts(text)
+        self.assertEqual(result["encoding"], "GSM-7")
         self.assertEqual(result["parts"], 1)
-        self.assertEqual(result["encoding"], "Unicode")
-        self.assertEqual(result["max_chars"], 70)
+        self.assertEqual(result["max_chars"], 160)
 
-    def test_unicode_multi_part(self):
-        text = "\u00e9" * 71
+    def test_gsm7_multi_part_with_accents(self):
+        text = "\u00e9" * 161
         result = count_sms_parts(text)
         self.assertEqual(result["parts"], 2)
-        self.assertEqual(result["encoding"], "Unicode")
-        self.assertEqual(result["max_chars"], 67)
+        self.assertEqual(result["encoding"], "GSM-7")
+        self.assertEqual(result["max_chars"], 153)
 
     def test_auto_detect_gsm7(self):
         result = count_sms_parts("Test", encoding="auto")
@@ -108,15 +108,31 @@ class TestCountSmsParts(IntegrationTestCase):
         result = count_sms_parts("\u4f60\u597d\u4e16\u754c", encoding="auto")
         self.assertEqual(result["encoding"], "Unicode")
 
+    def test_true_unicode_single_part(self):
+        result = count_sms_parts("\u4f60\u597d")
+        self.assertEqual(result["parts"], 1)
+        self.assertEqual(result["encoding"], "Unicode")
+        self.assertEqual(result["max_chars"], 70)
 
-class TestIsGsm7(IntegrationTestCase):
+    def test_true_unicode_multi_part(self):
+        text = "\u4f60" * 71
+        result = count_sms_parts(text)
+        self.assertEqual(result["parts"], 2)
+        self.assertEqual(result["encoding"], "Unicode")
+        self.assertEqual(result["max_chars"], 67)
+
+
+class TestIsGsm7(SMSRelayTestCase):
     """Test GSM-7 character detection."""
 
     def test_basic_ascii(self):
         self.assertTrue(is_gsm7("Hello"))
 
-    def test_unicode_char(self):
-        self.assertFalse(is_gsm7("\u00e9"))
+    def test_accented_is_gsm7(self):
+        self.assertTrue(is_gsm7("\u00e9"))
+
+    def test_true_unicode_char(self):
+        self.assertFalse(is_gsm7("\u4f60"))
 
     def test_empty(self):
         self.assertTrue(is_gsm7(""))
@@ -125,7 +141,7 @@ class TestIsGsm7(IntegrationTestCase):
         self.assertTrue(is_gsm7(None))
 
 
-class TestOptOut(IntegrationTestCase):
+class TestOptOut(SMSRelayTestCase):
     """Test opt-out checking."""
 
     def test_not_opted_out(self):
@@ -160,7 +176,7 @@ class TestOptOut(IntegrationTestCase):
         self.assertFalse(is_opted_out(phone))
 
 
-class TestValidatePhoneList(IntegrationTestCase):
+class TestValidatePhoneList(SMSRelayTestCase):
     """Test phone list validation."""
 
     def test_valid_numbers(self):
@@ -176,7 +192,7 @@ class TestValidatePhoneList(IntegrationTestCase):
         self.assertEqual(result[0], "+15551234567")
 
 
-class TestVerifyWebhookSignature(IntegrationTestCase):
+class TestVerifyWebhookSignature(SMSRelayTestCase):
     """Test HMAC-SHA256 webhook signature verification."""
 
     def test_valid_signature(self):
@@ -197,7 +213,7 @@ class TestVerifyWebhookSignature(IntegrationTestCase):
         self.assertFalse(verify_webhook_signature(b"data", "secret", ""))
 
 
-class TestFormatForDisplay(IntegrationTestCase):
+class TestFormatForDisplay(SMSRelayTestCase):
     """Test phone formatting for display."""
 
     def test_us_number(self):

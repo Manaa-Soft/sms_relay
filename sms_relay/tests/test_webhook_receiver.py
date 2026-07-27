@@ -1,7 +1,7 @@
 import json
 import frappe
 from unittest.mock import patch, MagicMock
-from frappe.tests import IntegrationTestCase
+from sms_relay.tests.conftest import SMSRelayTestCase
 from sms_relay.api.webhook_receiver import (
     incoming_webhook,
     _handle_delivery_report,
@@ -12,7 +12,7 @@ from sms_relay.api.webhook_receiver import (
 )
 
 
-class TestIdempotencyCheck(IntegrationTestCase):
+class TestIdempotencyCheck(SMSRelayTestCase):
     """Test webhook idempotency."""
 
     def test_first_call_returns_false(self):
@@ -27,7 +27,7 @@ class TestIdempotencyCheck(IntegrationTestCase):
         self.assertTrue(result)
 
 
-class TestDeliveryReport(IntegrationTestCase):
+class TestDeliveryReport(SMSRelayTestCase):
     """Test delivery report handling."""
 
     def test_delivered_status(self):
@@ -57,7 +57,7 @@ class TestDeliveryReport(IntegrationTestCase):
         self.assertEqual(queue.status, "Cancelled")
 
 
-class TestIncomingSms(IntegrationTestCase):
+class TestIncomingSms(SMSRelayTestCase):
     """Test incoming SMS handling."""
 
     def test_creates_queue_entry(self):
@@ -77,7 +77,7 @@ class TestIncomingSms(IntegrationTestCase):
         self.assertEqual(count_after, count_before)
 
 
-class TestWebhookDeliveryQueue(IntegrationTestCase):
+class TestWebhookDeliveryQueue(SMSRelayTestCase):
     """Test webhook delivery queue creation."""
 
     def test_creates_delivery_entry(self):

@@ -1,5 +1,6 @@
 import json
 import frappe
+import requests
 from frappe import _
 from frappe.utils import now, cint, add_to_date, getdate
 from sms_relay.core.sms_utils import get_relay_settings
@@ -174,7 +175,6 @@ def check_device_health():
             frappe.log_error(title="Device Health Check: {}".format(device.name))
 
 def _check_single_device(device):
-    import requests
     if device.gateway_type == "Android SMS Gateway":
         base_url = (device.server_url or "").rstrip("/")
         url = "{}/api/mobile/v1/device".format(base_url)
@@ -282,7 +282,6 @@ def process_webhook_deliveries():
 
 
 def _process_webhook_delivery(delivery_name):
-    import requests as _requests
     delivery = frappe.get_doc("SMS Webhook Delivery", delivery_name)
     if delivery.status == "Sent":
         return
@@ -303,7 +302,7 @@ def _process_webhook_delivery(delivery_name):
     payload = delivery.payload or "{}"
 
     try:
-        resp = _requests.post(delivery.url, data=payload, headers=headers, timeout=30)
+        resp = requests.post(delivery.url, data=payload, headers=headers, timeout=30)
         delivery.response_code = resp.status_code
         delivery.response_body = resp.text[:2000] if resp.text else ""
         delivery.attempts = cint(delivery.attempts) + 1
@@ -313,7 +312,7 @@ def _process_webhook_delivery(delivery_name):
             delivery.status = "Sent"
         else:
             _set_webhook_retry(delivery)
-    except _requests.exceptions.RequestException as e:
+    except requests.exceptions.RequestException as e:
         delivery.attempts = cint(delivery.attempts) + 1
         delivery.last_retry_at = now()
         delivery.error_message = str(e)[:2000]
