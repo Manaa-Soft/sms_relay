@@ -24,12 +24,19 @@ Global configuration for the entire SMS relay system.
 | failover_enabled | Check | Use next device if primary fails |
 | global_rate_limit | Int | Max SMS per minute across all devices (default: 60) |
 | check_opt_out | Check | Skip opted-out numbers |
+| send_interval_min | Int | Minimum delay between sends in seconds (default: 0) |
+| send_interval_max | Int | Maximum delay between sends in seconds (default: 0) |
+| rate_limit_period | Select | Per-device rate limit period: Per Minute / Per Hour / Per Day |
+| per_device_rate_limit | Int | Max SMS per device per rate limit period (default: 0 = unlimited) |
+| device_active_within | Int | Skip devices inactive for more than N hours (default: 0 = no filter) |
 
 #### Webhook (Incoming SMS)
 | Field | Type | Description |
 |---|---|---|
 | webhook_enabled | Check | Enable incoming webhooks |
 | webhook_secret | Password | HMAC-SHA256 verification secret |
+| webhook_max_retries | Int | Max webhook retry attempts (default: 15) |
+| webhook_base_delay | Int | Exponential backoff base delay in seconds (default: 30) |
 
 ---
 
@@ -151,6 +158,9 @@ Immutable audit trail of all SMS activity.
 | gateway_message_id | Data | Gateway-assigned ID |
 | device | Link: SMS Device | Sending device |
 | sim_number | Data | SIM slot used |
+| device_id | Data | Gateway device ID |
+| message_id | Data | Client-supplied ID for idempotency |
+| cancelled_at | Datetime | When cancelled |
 | queued_at | Datetime | When queued |
 | sent_at | Datetime | When sent |
 | delivered_at | Datetime | When delivered |
@@ -186,6 +196,10 @@ Async message queue with priority tiers and retry support.
 | max_retries | Int | Max retries (default: 3) |
 | error_log | Small Text | Error details |
 | scheduled_at | Datetime | Deferred send time |
+| ttl_seconds | Int | Time-to-live in seconds (0 = no expiry) |
+| valid_until | Datetime | Absolute expiry time |
+| message_id | Data | Client-supplied unique ID for idempotency |
+| cancelled_at | Datetime | When cancelled (read-only) |
 | sent_at | Datetime | When sent |
 
 ### Priority Tiers
@@ -376,6 +390,43 @@ Asynchronous message outbox with exponential backoff retry.
 | 3 | 4 minutes |
 | 4 | 8 minutes |
 | 5 | 16 minutes |
+
+---
+
+## SMS Webhook Delivery
+
+**Module:** SMS Relay | **Type:** Standard (Read-only)
+
+Webhook retry queue with exponential backoff. Created when a webhook delivery fails and needs to be retried.
+
+### Fields
+
+| Field | Type | Description |
+|---|---|---|
+| url | Data | Webhook URL |
+| status | Select | Pending/Sending/Sent/Failed/Cancelled |
+| attempts | Int | Current attempt count |
+| max_attempts | Int | Max attempts (default: 15) |
+| payload | Code (JSON) | Request body |
+| headers | Code (JSON) | HTTP headers |
+| response_code | Int | Last response code (read-only) |
+| response_body | Long Text | Last response body (read-only) |
+| next_retry_at | Datetime | When to retry next |
+| last_retry_at | Datetime | Last attempt time |
+| base_delay | Int | Base delay in seconds for exponential backoff (default: 30) |
+| error_message | Long Text | Last error |
+
+### Backoff Schedule
+
+| Attempt | Wait Before Next |
+|---|---|
+| 1 | 30 seconds |
+| 2 | 1 minute |
+| 3 | 2 minutes |
+| 4 | 4 minutes |
+| 5 | 8 minutes |
+| ... | Doubles each time |
+| 15 | ~4 hours |
 
 ---
 

@@ -24,6 +24,11 @@ Singleton DocType — one record for the entire site.
 | Enable Failover | Check | 1 | Try next device if primary fails. |
 | Global Rate Limit | Int | 60 | Max SMS per minute across all devices. |
 | Check Opt-Out | Check | 1 | Skip opted-out numbers before sending. |
+| Send Interval Min | Int | 0 | Minimum delay between sends in seconds. |
+| Send Interval Max | Int | 0 | Maximum delay between sends in seconds. |
+| Rate Limit Period | Select | Per Minute | Per-device rate limit period: Per Minute / Per Hour / Per Day. |
+| Per-Device Rate Limit | Int | 0 | Max SMS per device per rate limit period (0 = unlimited). |
+| Device Active Within | Int | 0 | Skip devices inactive for more than N hours (0 = no filter). |
 
 ### Routing Strategies
 
@@ -39,6 +44,8 @@ Singleton DocType — one record for the entire site.
 |---|---|---|---|
 | Enable Incoming Webhooks | Check | 0 | Receive delivery receipts and incoming SMS. |
 | Webhook HMAC Secret | Password | — | Secret for verifying webhook signatures (header: `X-Webhook-Signature`). |
+| Webhook Max Retries | Int | 15 | Max retry attempts for failed webhook deliveries. |
+| Webhook Base Delay | Int | 30 | Exponential backoff base delay in seconds. |
 
 ---
 

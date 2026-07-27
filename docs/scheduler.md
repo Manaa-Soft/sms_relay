@@ -22,6 +22,20 @@ sms_relay registers jobs with the Frappe scheduler. These run automatically at t
 
 ---
 
+## process_scheduled_messages
+
+**Frequency:** Every minute (`"all"` scheduler event)
+
+**Purpose:** Processes deferred/future-scheduled SMS messages that are now due.
+
+**What it does:**
+1. Fetches SMS Queue entries with status "Queued", `scheduled_at <= now()`, and `scheduled_at` is set
+2. Orders by scheduled_at ASC
+3. For each entry: delegates to `_process_queue_item()` (same as process_sms_queue)
+4. Commits changes
+
+---
+
 ## process_outbox
 
 **Frequency:** Every minute
@@ -65,6 +79,34 @@ sms_relay registers jobs with the Frappe scheduler. These run automatically at t
    d. Update sent/failed/pending counts
    e. If no pending recipients → set status to "Completed"
 3. Commits changes
+
+---
+
+## process_webhook_deliveries
+
+**Frequency:** Every minute (`"all"` scheduler event)
+
+**Purpose:** Retries failed webhook deliveries with exponential backoff.
+
+**What it does:**
+1. Fetches SMS Webhook Delivery entries with status "Pending" or "Failed" and `next_retry_at <= now()`
+2. For each entry:
+   a. Checks max attempts not exceeded
+   b. Sends HTTP POST to the webhook URL with payload and headers
+   c. On success (2xx): status → "Sent"
+   d. On failure: increments attempts, calculates next retry (base_delay * 2^attempts)
+   e. If max attempts exceeded: status → "Failed"
+3. Commits changes
+
+**Backoff Schedule:**
+| Attempt | Wait Before Next |
+|---|---|
+| 1 | 30 seconds |
+| 2 | 1 minute |
+| 3 | 2 minutes |
+| 4 | 4 minutes |
+| 5 | 8 minutes |
+| ... | Doubles each time |
 
 ---
 
@@ -142,8 +184,10 @@ sms_relay registers jobs with the Frappe scheduler. These run automatically at t
 scheduler_events = {
     "all": [
         "sms_relay.tasks.process_sms_queue",
+        "sms_relay.tasks.process_scheduled_messages",
         "sms_relay.tasks.process_outbox",
         "sms_relay.tasks.process_bulk_messages",
+        "sms_relay.tasks.process_webhook_deliveries",
         "sms_relay.utils.trigger_sms_notifications_all",
     ],
     "hourly": [
