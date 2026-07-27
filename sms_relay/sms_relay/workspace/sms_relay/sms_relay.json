@@ -47,16 +47,23 @@
    "link_type": "DocType",
    "hidden": 0
   },
-  {
-   "type": "Link",
-   "label": "SMS Opt Out",
-   "link_to": "SMS Opt Out",
-   "link_type": "DocType",
-   "hidden": 0
-  },
-  {
-   "type": "Card Break",
-   "label": "Bulk & Campaigns",
+   {
+    "type": "Link",
+    "label": "SMS Opt Out",
+    "link_to": "SMS Opt Out",
+    "link_type": "DocType",
+    "hidden": 0
+   },
+   {
+    "type": "Link",
+    "label": "SMS Webhook Delivery",
+    "link_to": "SMS Webhook Delivery",
+    "link_type": "DocType",
+    "hidden": 0
+   },
+   {
+    "type": "Card Break",
+    "label": "Bulk & Campaigns",
    "hidden": 0
   },
   {
@@ -168,16 +175,23 @@
    "link_to": "SMS Notification Log",
    "icon": "bell"
   },
-  {
-   "type": "Link",
-   "label": "SMS Opt Out",
-   "link_type": "DocType",
-   "link_to": "SMS Opt Out",
-   "icon": "user-x"
-  },
-  {
-   "type": "Section Break",
-   "label": "Bulk & Campaigns",
+   {
+    "type": "Link",
+    "label": "SMS Opt Out",
+    "link_type": "DocType",
+    "link_to": "SMS Opt Out",
+    "icon": "user-x"
+   },
+   {
+    "type": "Link",
+    "label": "SMS Webhook Delivery",
+    "link_type": "DocType",
+    "link_to": "SMS Webhook Delivery",
+    "icon": "send"
+   },
+   {
+    "type": "Section Break",
+    "label": "Bulk & Campaigns",
    "icon": "send"
   },
   {
