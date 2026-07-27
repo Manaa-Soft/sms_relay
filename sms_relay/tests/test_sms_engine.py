@@ -161,7 +161,7 @@ class TestRenderTemplate(SMSRelayTestCase):
         tmpl.template_name = "Space Template"
         tmpl.category = "UTILITY"
         tmpl.language = "en"
-        tmpl.message_template = "     "
+        tmpl.message_template = "{{ ' ' * 10 }}"
         tmpl.insert(ignore_permissions=True)
         result = _render_template("Space Template", {})
         self.assertEqual(result.strip(), "")

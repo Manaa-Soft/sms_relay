@@ -55,7 +55,7 @@ class TestNotificationRendering(SMSRelayTestCase):
         tmpl.template_name = "WS Template"
         tmpl.category = "UTILITY"
         tmpl.language = "en"
-        tmpl.message_template = "     "
+        tmpl.message_template = "{{ ' ' * 10 }}"
         tmpl.insert(ignore_permissions=True)
         result = _render_template("WS Template", {})
         self.assertEqual(result.strip(), "")
