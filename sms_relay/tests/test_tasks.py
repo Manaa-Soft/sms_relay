@@ -131,12 +131,12 @@ class TestSendOverdueReminders(SMSRelayTestCase):
         mock_phone.return_value = "+967777715787"
         mock_enqueue.return_value = None
 
-        invoices = [{
+        invoices = [frappe._dict({
             "name": "ACC-SINV-2026-00033",
             "customer": "Faissal Mannaa",
             "due_date": "2026-07-10",
             "outstanding_amount": 10000.0,
-        }]
+        })]
         with patch("frappe.get_all", return_value=invoices):
             send_overdue_reminders()
 
@@ -154,12 +154,12 @@ class TestSendOverdueReminders(SMSRelayTestCase):
     def test_skips_customer_without_phone(self, mock_phone, mock_enqueue):
         mock_phone.return_value = None
 
-        invoices = [{
+        invoices = [frappe._dict({
             "name": "ACC-SINV-2026-00033",
             "customer": "Faissal Mannaa",
             "due_date": "2026-07-10",
             "outstanding_amount": 10000.0,
-        }]
+        })]
         with patch("frappe.get_all", return_value=invoices):
             send_overdue_reminders()
 
@@ -171,18 +171,18 @@ class TestSendOverdueReminders(SMSRelayTestCase):
         mock_phone.return_value = "+967777715787"
 
         invoices = [
-            {
+            frappe._dict({
                 "name": "ACC-SINV-2026-00177",
                 "customer": "Faissal Mannaa",
                 "due_date": "2026-07-19",
                 "outstanding_amount": 50.0,
-            },
-            {
+            }),
+            frappe._dict({
                 "name": "ACC-SINV-2026-00033",
                 "customer": "Manaa Mannaa",
                 "due_date": "2026-07-10",
                 "outstanding_amount": 2000.0,
-            },
+            }),
         ]
         with patch("frappe.get_all", return_value=invoices):
             send_overdue_reminders()
