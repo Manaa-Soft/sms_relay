@@ -218,9 +218,9 @@ def send_overdue_reminders():
             phone = _get_customer_phone(inv.customer)
             if not phone:
                 continue
-            msg = "Dear {} - Reminder: Invoice {} of {} is overdue (due {}). Outstanding: {}. Please pay soon.".format(
-                inv.customer, inv.name, frappe.utils.fmt_money(inv.outstanding_amount),
-                frappe.utils.formatdate(inv.due_date),
+            msg = "Dear {} - Reminder: Invoice {} is overdue (due {}). Outstanding: {}. Please pay soon.".format(
+                inv.customer, inv.name, frappe.utils.formatdate(inv.due_date),
+                frappe.utils.fmt_money(inv.outstanding_amount),
             )
             _enqueue_sms(phone=phone, message=msg, priority="Normal")
         except Exception:
