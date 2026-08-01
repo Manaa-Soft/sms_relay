@@ -79,8 +79,18 @@ ERPNext (Invoice/Payment/Delivery/PO)
 
 - Frappe Framework v15+ (tested on v16)
 - ERPNext v15+ (for Sales Invoice, Payment Request, Delivery Note, Purchase Order)
-- [Android SMS Gateway](https://github.com/AuroraLS/android-sms-gateway) server running in Docker
+- [Android SMS Gateway](https://github.com/capcom6/android-sms-gateway) server running in Docker
 - At least one Android phone connected to the gateway
+
+## Android SMS Gateway
+
+SMS Relay sends SMS through the [Android SMS Gateway](https://github.com/capcom6/android-sms-gateway) project by capcom6:
+
+- **Server** — Docker image `ghcr.io/android-sms-gateway/server` (see the project's [setup guide](https://github.com/capcom6/android-sms-gateway) and our [private server setup wiki](https://github.com/Manaa-Soft/sms_relay/wiki/Private-Server-Setup))
+- **Android app** — sends SMS via the phone's SIM cards, connecting to the server through `/api/mobile/v1` (Cloud Server mode)
+- **ERPNext integration** — SMS Relay calls the server's 3rd-party API at `POST /api/3rdparty/v1/message` using the per-device credentials returned when the phone registered
+
+This replaces the legacy [AuroraLS/android-sms-gateway](https://github.com/AuroraLS/android-sms-gateway) project.
 
 ## Installation
 
