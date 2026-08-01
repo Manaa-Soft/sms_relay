@@ -97,6 +97,13 @@ def process_bulk_job(bulk_name):
         bulk.pending_count = cint(bulk.pending_count) - 1
     bulk.save(ignore_permissions=True)
     frappe.db.commit()
+    still_pending = [r for r in bulk.recipients if r.status == "Pending"]
+    if not still_pending:
+        bulk.reload()
+        bulk.status = "Completed"
+        bulk.completed_at = now()
+        bulk.save(ignore_permissions=True)
+        frappe.db.commit()
 
 def _resolve_message(bulk, phone):
     if bulk.message_type == "Text":
@@ -108,13 +115,13 @@ def _resolve_message(bulk, phone):
 
 def _enqueue_bulk_sms(phone, message, account=None):
     queue = frappe.new_doc("SMS Queue")
-    queue.phone_number = phone
+    queue.recipient = phone
     queue.message = message
     queue.status = "Queued"
     queue.priority_tier = "Normal"
     queue.max_retries = 3
     if account:
-        queue.device_name = account
+        queue.device = account
     queue.insert(ignore_permissions=True)
     frappe.db.commit()
     return queue

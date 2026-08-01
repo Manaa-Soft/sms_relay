@@ -54,22 +54,22 @@ The system uses a two-layer authentication model between three components:
 ```
 sms_relay/sms_relay/
 ├── core/
-│   ├── sms_engine.py           # Device selection, load balancing, gateway dispatch
+│   ├── sms_engine.py           # Device selection, load balancing, gateway dispatch, cancel, idempotency
 │   ├── notification_handler.py # Doc-event trigger listener & Jinja renderer
 │   ├── bulk_engine.py          # Batch processor & background worker queuing
 │   └── sms_utils.py            # Phone formatting (E.164), character counters, HMAC
 ├── api/
-│   ├── webhook_receiver.py     # Incoming SMS & delivery status webhook
-│   └── endpoints.py            # REST APIs for external gateway sync
+│   ├── webhook_receiver.py     # Incoming SMS, delivery status, cancellation, webhook retry queue
+│   └── endpoints.py            # REST APIs: send, bulk, health, cancel, history, inbox, settings
 ├── utils/
 │   ├── __init__.py             # Notification map, after_commit dispatch, scheduler triggers
 │   ├── jinja_methods.py        # Custom Jinja filters (money, date, clean phone)
 │   └── contact_manager.py      # Auto-linking inbound SMS to Leads/Contacts/Customers
 ├── doctype/
 │   ├── sms_device/             # Connection, status, quotas, Connect Device button
-│   ├── sms_gateway_settings/   # Routing, rate limit, webhook secret, failover
-│   ├── sms_log/                # Delivery status, timing, error details
-│   ├── sms_queue/              # Priority tiers, target SIM, retry counts
+│   ├── sms_gateway_settings/   # Routing, rate limit, webhook secret, failover, send intervals
+│   ├── sms_log/                # Delivery status, timing, error details, device_id, message_id
+│   ├── sms_queue/              # Priority tiers, target SIM, retry counts, TTL, idempotency
 │   ├── sms_template/           # Language, header/footer, char counter
 │   ├── sms_opt_out/            # STOP blacklist
 │   ├── sms_bulk_message/       # Campaign manager
@@ -77,6 +77,7 @@ sms_relay/sms_relay/
 │   ├── sms_notification/       # Doc-triggered rules (Jinja or Parameter template type)
 │   ├── sms_notification_log/   # Audit log
 │   ├── sms_outbox/             # Async retry outbox
+│   ├── sms_webhook_delivery/   # Webhook retry queue with exponential backoff
 │   ├── sms_recipient_list/     # Saved groups
 │   ├── sms_recipient/          # Child table
 │   └── sms_message_field/      # Positional parameter mapping for {{N}}
@@ -133,7 +134,9 @@ sms_relay/sms_relay/
 3. HMAC signature verified if configured (header: `X-Webhook-Signature`)
 4. Idempotency check via cache
 5. SMS Queue and SMS Log status updated
-6. If incoming SMS: Communication doc created, auto-linked to Contact/Lead
+6. If `sms:cancelled`: both Queue and Log marked as Cancelled
+7. If incoming SMS: Communication doc created, auto-linked to Contact/Lead
+8. If webhook delivery fails: `SMS Webhook Delivery` entry created for retry
 
 ## Core Modules
 
@@ -143,14 +146,15 @@ sms_relay/sms_relay/
 |---|---|
 | `send_sms()` | Main entry point, hooks into Frappe |
 | `send_sms_override()` | Monkey-patches Frappe SMS Settings |
+| `cancel_message()` | Cancel a queued SMS before sending |
 | `_select_device()` | Round Robin / Priority / Random routing |
 | `_check_quota()` | Daily quota check per device |
 | `_throttle_check()` | Per-device per-minute rate limit |
 | `_send_to_device()` | HTTP POST to gateway (Basic Auth, accepts 202) |
-| `_send_android_gateway()` | Android SMS Gateway payload construction |
+| `_send_android_gateway()` | Android SMS Gateway payload with idempotency check |
 | `_send_custom_http()` | Custom HTTP API with Bearer token |
-| `_enqueue_sms()` | Create SMS Queue entry |
-| `_log_sms()` | Create SMS Log entry |
+| `_enqueue_sms()` | Create SMS Queue entry (supports TTL, scheduling) |
+| `_log_sms()` | Create SMS Log entry (supports message_id, device_id) |
 | `_render_template()` | Jinja2 template rendering |
 
 ### utils/__init__.py
@@ -168,8 +172,10 @@ sms_relay/sms_relay/
 | Function | Purpose |
 |---|---|
 | `process_sms_queue()` | Dispatch queued SMS to devices (every minute) |
+| `process_scheduled_messages()` | Process deferred/future-scheduled SMS (every minute) |
 | `process_outbox()` | Process outbox with exponential backoff (every minute) |
 | `process_bulk_messages()` | Process bulk campaigns in batches (every minute) |
+| `process_webhook_deliveries()` | Retry failed webhooks with exponential backoff (every minute) |
 | `check_device_health()` | Heartbeat, battery, signal checks (hourly) |
 | `send_overdue_reminders()` | Overdue invoice notifications (daily) |
 | `retry_failed_sms()` | Re-enqueue retryable failures (daily) |
@@ -191,8 +197,10 @@ sms_relay/sms_relay/
 | Frequency | Job | Description |
 |---|---|---|
 | Every minute | `process_sms_queue` | Flush queued SMS to devices |
+| Every minute | `process_scheduled_messages` | Process deferred/future-scheduled SMS |
 | Every minute | `process_outbox` | Process outbox with exponential backoff |
 | Every minute | `process_bulk_messages` | Process bulk campaign batches |
+| Every minute | `process_webhook_deliveries` | Retry failed webhooks with backoff |
 | Hourly | `check_device_health` | Heartbeat, battery, signal checks |
 | Daily | `send_overdue_reminders` | Overdue invoice notifications |
 | Daily | `retry_failed_sms` | Re-enqueue retryable failures |

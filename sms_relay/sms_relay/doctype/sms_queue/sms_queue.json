@@ -18,7 +18,7 @@
    "fieldname": "status",
    "fieldtype": "Select",
    "label": "Status",
-   "options": "Queued\nSending\nSent\nFailed\nCancelled",
+    "options": "Queued\nSending\nSent\nFailed\nCancelled\nReceived",
    "default": "Queued",
    "in_list_view": 1
   },
@@ -102,12 +102,17 @@
    "label": "Retry Count",
    "default": 0
   },
-  {
-   "fieldname": "max_retries",
-   "fieldtype": "Int",
-   "label": "Max Retries",
-   "default": 3
-  },
+   {
+    "fieldname": "max_retries",
+    "fieldtype": "Int",
+    "label": "Max Retries",
+    "default": 3
+   },
+   {
+    "fieldname": "next_retry_at",
+    "fieldtype": "Datetime",
+    "label": "Next Retry At"
+   },
   {
    "fieldname": "error_log",
    "fieldtype": "Long Text",
@@ -124,6 +129,30 @@
    "label": "Scheduled At",
    "description": "Leave empty for immediate"
   },
+   {
+    "fieldname": "ttl_seconds",
+    "fieldtype": "Int",
+    "label": "TTL (seconds)",
+    "description": "Time-to-live in seconds. Message expires if not sent within this window. 0 = no expiry."
+   },
+   {
+    "fieldname": "valid_until",
+    "fieldtype": "Datetime",
+    "label": "Valid Until",
+    "description": "Absolute expiry time. Message fails if not sent before this time."
+   },
+   {
+    "fieldname": "message_id",
+    "fieldtype": "Data",
+    "label": "Message ID",
+    "description": "Client-supplied unique ID for idempotency. Prevents duplicate sends."
+   },
+   {
+    "fieldname": "cancelled_at",
+    "fieldtype": "Datetime",
+    "label": "Cancelled At",
+    "read_only": 1
+   },
    {
     "fieldname": "sent_at",
     "fieldtype": "Datetime",

@@ -9,7 +9,7 @@
  "editable_grid": 1,
  "track_changes": 1,
  "naming_rule": "Expression",
- "autoname": "format:{template_name}-{language_code}",
+  "autoname": "format:{template_name}",
  "allow_rename": 1,
  "title_field": "template_name",
  "search_fields": "template_name,category,language",

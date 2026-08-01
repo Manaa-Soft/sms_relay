@@ -61,9 +61,17 @@ ERPNext (Invoice/Payment/Delivery/PO)
 - **Async queue** — Priority tiers (High for OTP/Payment, Low for marketing)
 - **SMS Opt Out** — Automatic STOP blacklist with cache invalidation
 - **Delivery tracking** — Webhook delivery receipts with HMAC-SHA256 verification
+- **Message cancellation** — Cancel queued messages before sending
+- **Message scheduling** — Defer SMS with `schedule_at` and TTL/expiry
+- **Idempotency** — `message_id` prevents duplicate sends
+- **Message history** — Full queryable history with status/device/phone filters
+- **Inbox** — Incoming SMS stored and queryable
+- **Webhook retry** — Failed webhooks retried with exponential backoff (SMS Webhook Delivery queue)
 - **Device health monitoring** — Battery, signal strength, SIM info, hourly/daily quotas
+- **Structured health checks** — Per-device pass/warn/fail with failure rates
+- **Rate limiting** — Per-device rate limits, send intervals between messages
 - **Character counter** — GSM-7 (160 chars) vs Unicode (70 chars) detection, multi-part SMS calculation
-- **REST API** — Send, bulk, health, preview, retry, stats, notification preview, test connection, connect device
+- **REST API** — Send, bulk, health, preview, retry, stats, cancel, history, inbox, settings, notification preview, test connection, connect device
 - **Dashboard** — Real-time device health, daily stats, auto-refresh
 - **Desk sidebar** — Appears in Frappe v16/v17 sidebar navigation
 
@@ -71,8 +79,18 @@ ERPNext (Invoice/Payment/Delivery/PO)
 
 - Frappe Framework v15+ (tested on v16)
 - ERPNext v15+ (for Sales Invoice, Payment Request, Delivery Note, Purchase Order)
-- [Android SMS Gateway](https://github.com/AuroraLS/android-sms-gateway) server running in Docker
+- [Android SMS Gateway](https://github.com/capcom6/android-sms-gateway) server running in Docker
 - At least one Android phone connected to the gateway
+
+## Android SMS Gateway
+
+SMS Relay sends SMS through the [Android SMS Gateway](https://github.com/capcom6/android-sms-gateway) project by capcom6:
+
+- **Server** — Docker image `ghcr.io/android-sms-gateway/server` (see the project's [setup guide](https://github.com/capcom6/android-sms-gateway) and our [private server setup wiki](https://github.com/Manaa-Soft/sms_relay/wiki/Private-Server-Setup))
+- **Android app** — sends SMS via the phone's SIM cards, connecting to the server through `/api/mobile/v1` (Cloud Server mode)
+- **ERPNext integration** — SMS Relay calls the server's 3rd-party API at `POST /api/3rdparty/v1/message` using the per-device credentials returned when the phone registered
+
+This replaces the legacy [AuroraLS/android-sms-gateway](https://github.com/AuroraLS/android-sms-gateway) project.
 
 ## Installation
 
@@ -101,8 +119,14 @@ bench restart
 | Routing Strategy | Round Robin / Priority / Random |
 | Enable Failover | Use next device if primary fails |
 | Global Rate Limit | Max SMS per minute across all devices |
+| Send Interval Min/Max | Random delay between sends (seconds) |
+| Rate Limit Period | Per-device limit period (Per Minute/Hour/Day) |
+| Per-Device Rate Limit | Max SMS per device per period |
+| Device Active Within | Skip devices inactive for N hours |
 | Check Opt-Out | Skip opted-out numbers |
 | Enable Incoming Webhooks | Receive delivery receipts |
+| Webhook Max Retries | Max webhook retry attempts (default: 15) |
+| Webhook Base Delay | Exponential backoff base delay (default: 30s) |
 
 ### 2. Add SMS Devices
 
@@ -165,9 +189,9 @@ frappe.call({
 });
 ```
 
-## DocTypes (14 Total)
+## DocTypes (15 Total)
 
-### New DocTypes (9)
+### New DocTypes (10)
 
 | DocType | Purpose |
 |---|---|
@@ -177,6 +201,7 @@ frappe.call({
 | SMS Notification | Doc-triggered automated SMS rules with Jinja or Parameter templates |
 | SMS Notification Log | Delivery audit log per document event |
 | SMS Outbox | Async outbox with exponential backoff retry |
+| SMS Webhook Delivery | Webhook retry queue with exponential backoff |
 | SMS Recipient List | Saved target groups (e.g., "VIP Customers") |
 | SMS Recipient | Child table for recipient lists |
 | SMS Message Field | Dynamic field mapping for positional parameters in notifications |
@@ -185,11 +210,11 @@ frappe.call({
 
 | DocType | Enhancements |
 |---|---|
-| SMS Gateway Settings | Routing strategy, rate limiting, webhook secret, failover |
+| SMS Gateway Settings | Routing strategy, rate limiting, webhook secret, failover, send intervals, per-device rate limits |
 | SMS Device | Server URL, username/password, SIM info, device model, carrier, battery, quotas, Connect Device / Send Test SMS buttons |
 | SMS Template | Language, header/footer, character counter, positional param support |
-| SMS Log | Delivery status, delivery timestamp, channel, retry count |
-| SMS Queue | Priority tiers, target SIM, retry counts |
+| SMS Log | Delivery status, delivery timestamp, channel, retry count, device_id, message_id, cancelled_at |
+| SMS Queue | Priority tiers, target SIM, retry counts, ttl_seconds, valid_until, message_id, cancelled_at |
 
 ## API Reference
 
@@ -205,7 +230,10 @@ frappe.call({
         message: "Hello!",
         template: "Payment Reminder",  // optional
         device: "Phone A",            // optional, auto-select
-        sim: 1                        // optional
+        sim: 1,                       // optional
+        message_id: "unique-123",     // optional, idempotency key
+        ttl_seconds: 3600,            // optional, expires in 1 hour
+        schedule_at: "2026-07-28 09:00:00"  // optional, deferred send
     }
 });
 ```
@@ -231,9 +259,15 @@ frappe.call({
 | `sms_relay.api.endpoints.test_connection` | Test gateway connectivity (accepts optional `device_name` arg) |
 | `sms_relay.api.endpoints.connect_device` | Fetch device info from gateway (requires `device_name`) |
 | `sms_relay.api.endpoints.get_device_health` | Device health, battery, signal, quota usage |
+| `sms_relay.api.endpoints.get_structured_health` | Per-device pass/warn/fail checks with failure rates |
+| `sms_relay.api.endpoints.get_device_settings` | Get device settings from gateway |
+| `sms_relay.api.endpoints.update_device_settings` | Update device settings on gateway |
 | `sms_relay.api.endpoints.preview_template` | Render template with real document data |
 | `sms_relay.api.endpoints.retry_sms` | Re-queue a failed SMS |
+| `sms_relay.api.endpoints.cancel_message` | Cancel a queued SMS before sending |
 | `sms_relay.api.endpoints.get_sms_stats` | Today's sent/failed/delivered/queued counts |
+| `sms_relay.api.endpoints.get_message_history` | Full SMS history with filtering and pagination |
+| `sms_relay.api.endpoints.get_inbox` | Incoming SMS messages |
 | `sms_relay.api.endpoints.get_notification_preview` | Preview notification output with sample doc |
 
 ### Webhook
@@ -248,15 +282,17 @@ POST http://your-frappe-site/api/method/sms_relay.api.webhook_receiver.incoming_
 }
 ```
 
-Supported events: `sms:delivered`, `sms:failed`, `sms:sent`, `sms:received`, `system:ping`
+Supported events: `sms:delivered`, `sms:failed`, `sms:sent`, `sms:cancelled`, `sms:received`, `system:ping`
 
 ## Scheduled Jobs
 
 | Schedule | Job | Description |
 |---|---|---|
 | Every minute | `process_sms_queue` | Flush queued SMS to devices |
+| Every minute | `process_scheduled_messages` | Process deferred/future-scheduled SMS |
 | Every minute | `process_outbox` | Process outbox with exponential backoff |
 | Every minute | `process_bulk_messages` | Process bulk campaign batches |
+| Every minute | `process_webhook_deliveries` | Retry failed webhook deliveries with backoff |
 | Hourly | `check_device_health` | Heartbeat, battery, signal checks |
 | Daily | `send_overdue_reminders` | Overdue invoice notifications |
 | Daily | `retry_failed_sms` | Re-enqueue retryable failures |
@@ -279,7 +315,7 @@ sms_relay/sms_relay/
 │   ├── __init__.py             # Notification map, after_commit dispatch, scheduler triggers
 │   ├── jinja_methods.py        # Custom Jinja filters
 │   └── contact_manager.py      # Auto-link SMS to Contact/Lead
-├── doctype/                    # 14 DocTypes (9 new + 5 enhanced)
+├── doctype/                    # 15 DocTypes (10 new + 5 enhanced)
 ├── public/js/
 │   ├── sms_dashboard.js        # Real-time monitoring
 │   ├── bulk_message.js         # Bulk composer with progress

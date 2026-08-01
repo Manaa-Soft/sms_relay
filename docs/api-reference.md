@@ -17,6 +17,10 @@ Send an SMS immediately, bypassing the queue.
 | template | str | Yes* | SMS Template name (overrides message) |
 | device | str | No | Force specific device (auto-select if omitted) |
 | sim | int | No | SIM slot (1 or 2) |
+| message_id | str | No | Client-supplied unique ID for idempotency (prevents duplicate sends) |
+| ttl_seconds | int | No | Time-to-live in seconds (message expires if not sent within window) |
+| valid_until | str | No | Absolute expiry time (YYYY-MM-DD HH:MM:SS) |
+| schedule_at | str | No | Deferred send time (YYYY-MM-DD HH:MM:SS) |
 
 *Either `message` or `template` is required.
 
@@ -26,6 +30,15 @@ Send an SMS immediately, bypassing the queue.
     "status": "sent",
     "recipients": ["+1234567890"],
     "message_length": 45
+}
+```
+
+If a duplicate `message_id` is detected:
+```json
+{
+    "status": "already_sent",
+    "recipients": ["+1234567890"],
+    "message_id": "unique-123"
 }
 ```
 
@@ -274,6 +287,184 @@ Preview a notification's output with a sample document.
 
 ---
 
+## cancel_message
+
+Cancel a queued SMS message before it is sent.
+
+**Path:** `sms_relay.api.endpoints.cancel_message`
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|---|---|---|---|
+| queue_name | str | Yes | SMS Queue document name |
+
+**Returns:**
+```json
+{
+    "status": "cancelled",
+    "name": "SMSG-0001"
+}
+```
+
+---
+
+## get_message_history
+
+Query SMS message history with filtering and pagination.
+
+**Path:** `sms_relay.api.endpoints.get_message_history`
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|---|---|---|---|
+| from_date | str | No | Start date (YYYY-MM-DD) |
+| to_date | str | No | End date (YYYY-MM-DD) |
+| status | str | No | Filter by status (Sent/Failed/Delivered/etc.) |
+| device | str | No | Filter by device name |
+| phone | str | No | Filter by phone number (partial match) |
+| limit | int | No | Max results (default: 50) |
+| offset | int | No | Pagination offset (default: 0) |
+
+**Returns:**
+```json
+{
+    "messages": [
+        {
+            "name": "SMS-0001",
+            "phone": "+1234567890",
+            "message": "Hello!",
+            "status": "Sent",
+            "device": "Office Phone",
+            "message_id": "unique-123",
+            "creation": "2026-07-27 10:00:00"
+        }
+    ],
+    "total": 150,
+    "limit": 50,
+    "offset": 0
+}
+```
+
+---
+
+## get_inbox
+
+Get incoming SMS messages.
+
+**Path:** `sms_relay.api.endpoints.get_inbox`
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|---|---|---|---|
+| from_date | str | No | Start date (YYYY-MM-DD) |
+| to_date | str | No | End date (YYYY-MM-DD) |
+| phone | str | No | Filter by sender phone |
+| limit | int | No | Max results (default: 50) |
+| offset | int | No | Pagination offset (default: 0) |
+
+**Returns:**
+```json
+{
+    "messages": [
+        {
+            "name": "SMSG-0050",
+            "recipient": "+1234567890",
+            "message": "STOP",
+            "status": "Received",
+            "creation": "2026-07-27 11:00:00"
+        }
+    ],
+    "total": 5,
+    "limit": 50,
+    "offset": 0
+}
+```
+
+---
+
+## get_device_settings
+
+Get device settings from the gateway.
+
+**Path:** `sms_relay.api.endpoints.get_device_settings`
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|---|---|---|---|
+| device_name | str | Yes | SMS Device name |
+
+**Returns:**
+```json
+{
+    "success": true,
+    "settings": { ... }
+}
+```
+
+---
+
+## update_device_settings
+
+Update device settings on the gateway.
+
+**Path:** `sms_relay.api.endpoints.update_device_settings`
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|---|---|---|---|
+| device_name | str | Yes | SMS Device name |
+| settings_json | str or dict | Yes | Settings to update (JSON string or object) |
+
+**Returns:**
+```json
+{
+    "success": true
+}
+```
+
+---
+
+## get_structured_health
+
+Per-device structured health checks with pass/warn/fail status.
+
+**Path:** `sms_relay.api.endpoints.get_structured_health`
+
+**Parameters:** None
+
+**Returns:**
+```json
+{
+    "status": "pass",
+    "total_devices": 2,
+    "online_devices": 2,
+    "checks": [
+        {
+            "name": "Office Phone",
+            "status": "pass",
+            "is_online": true,
+            "battery_level": 85,
+            "sent_today": 45,
+            "failed_today": 1,
+            "failure_rate": "2.2%",
+            "quota_usage": "22.5%"
+        }
+    ]
+}
+```
+
+Status logic:
+- **pass**: device online, battery > 20%, failure rate normal
+- **warn**: battery low (< 20%) or high failure rate
+- **fail**: device offline
+
+---
+
 ## incoming_webhook
 
 Public endpoint for receiving delivery receipts and incoming SMS.
@@ -321,6 +512,7 @@ Public endpoint for receiving delivery receipts and incoming SMS.
 | sms:delivered | Message delivered to recipient |
 | sms:failed | Message delivery failed |
 | sms:sent | Message accepted by carrier |
+| sms:cancelled | Message was cancelled |
 | sms:received | Incoming SMS received |
 | system:ping | Device heartbeat |
 
@@ -344,8 +536,10 @@ Overrides `frappe.core.doctype.sms_settings.sms_settings.send_sms`. All outgoing
 | Frequency | Function | Path |
 |---|---|---|
 | Every minute | process_sms_queue | sms_relay.tasks.process_sms_queue |
+| Every minute | process_scheduled_messages | sms_relay.tasks.process_scheduled_messages |
 | Every minute | process_outbox | sms_relay.tasks.process_outbox |
 | Every minute | process_bulk_messages | sms_relay.tasks.process_bulk_messages |
+| Every minute | process_webhook_deliveries | sms_relay.tasks.process_webhook_deliveries |
 | Hourly | check_device_health | sms_relay.tasks.check_device_health |
 | Daily | send_overdue_reminders | sms_relay.tasks.send_overdue_reminders |
 | Daily | retry_failed_sms | sms_relay.tasks.retry_failed_sms |

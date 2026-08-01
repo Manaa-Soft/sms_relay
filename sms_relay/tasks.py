@@ -1,4 +1,6 @@
+import json
 import frappe
+import requests
 from frappe import _
 from frappe.utils import now, cint, add_to_date, getdate
 from sms_relay.core.sms_utils import get_relay_settings
@@ -20,10 +22,56 @@ def process_sms_queue():
             frappe.log_error(title="SMS Queue Processing: {}".format(item.name))
     frappe.db.commit()
 
+def process_scheduled_messages():
+    """Process messages scheduled for future delivery that are now due."""
+    from frappe.utils import now_datetime
+    now = now_datetime()
+    pending = frappe.get_all(
+        "SMS Queue",
+        filters={
+            "status": "Queued",
+            "scheduled_at": ["<=", now],
+            "scheduled_at": ["is", "set"],
+        },
+        order_by="scheduled_at asc",
+        limit=50,
+        fields=["name"],
+    )
+    for item in pending:
+        try:
+            _process_queue_item(item.name)
+        except Exception:
+            frappe.log_error(title="Scheduled SMS Processing: {}".format(item.name))
+    frappe.db.commit()
+
 def _process_queue_item(queue_name):
     queue = frappe.get_doc("SMS Queue", queue_name)
     if queue.status != "Queued":
         return
+
+    from frappe.utils import now_datetime
+    now = now_datetime()
+    if queue.valid_until and now > queue.valid_until:
+        queue.status = "Failed"
+        queue.error_log = "Message expired (valid_until reached)"
+        queue.save(ignore_permissions=True)
+        from sms_relay.core.sms_engine import _log_sms
+        _log_sms(queue.recipient, queue.message, "Failed", error="Message expired (valid_until)", message_id=queue.message_id)
+        return
+    if queue.ttl_seconds and queue.creation:
+        from frappe.utils import add_to_date
+        expires_at = add_to_date(queue.creation, seconds=cint(queue.ttl_seconds))
+        if now > expires_at:
+            queue.status = "Failed"
+            queue.error_log = "Message expired (TTL {} seconds)".format(queue.ttl_seconds)
+            queue.save(ignore_permissions=True)
+            from sms_relay.core.sms_engine import _log_sms
+            _log_sms(queue.recipient, queue.message, "Failed", error="Message expired (TTL)", message_id=queue.message_id)
+            return
+
+    if queue.scheduled_at and queue.scheduled_at > now:
+        return
+
     max_retries = cint(queue.max_retries) or 3
     if cint(queue.get("retry_count", 0)) >= max_retries:
         queue.status = "Failed"
@@ -102,7 +150,7 @@ def _process_outbox_item(outbox_name):
         queue.status = "Sent"
         queue.save(ignore_permissions=True)
         from sms_relay.core.sms_engine import _log_sms
-        _log_sms(phone, queue.message, "Sent", device_name=device_name, gateway_message_id=result.get("message_id"))
+        _log_sms(phone, queue.message, "Sent", device_name=device_name, gateway_message_id=result.get("message_id"), message_id=queue.message_id)
     else:
         outbox.error_message = result.get("error", "")
         if cint(outbox.attempts) >= cint(outbox.max_attempts):
@@ -127,7 +175,6 @@ def check_device_health():
             frappe.log_error(title="Device Health Check: {}".format(device.name))
 
 def _check_single_device(device):
-    import requests
     if device.gateway_type == "Android SMS Gateway":
         base_url = (device.server_url or "").rstrip("/")
         url = "{}/api/mobile/v1/device".format(base_url)
@@ -171,9 +218,9 @@ def send_overdue_reminders():
             phone = _get_customer_phone(inv.customer)
             if not phone:
                 continue
-            msg = "Dear {} - Reminder: Invoice {} of {} is overdue (due {}). Outstanding: {}. Please pay soon.".format(
-                inv.customer, inv.name, frappe.utils.fmt_money(inv.outstanding_amount),
-                frappe.utils.formatdate(inv.due_date),
+            msg = "Dear {} - Reminder: Invoice {} is overdue (due {}). Outstanding: {}. Please pay soon.".format(
+                inv.customer, inv.name, frappe.utils.formatdate(inv.due_date),
+                frappe.utils.fmt_money(inv.outstanding_amount),
             )
             _enqueue_sms(phone=phone, message=msg, priority="Normal")
         except Exception:
@@ -212,6 +259,78 @@ def reset_daily_quotas():
     for device in devices:
         frappe.db.set_value("SMS Device", device.name, "sent_today", 0)
     frappe.db.commit()
+
+def process_webhook_deliveries():
+    """Process pending webhook deliveries with exponential backoff."""
+    from frappe.utils import now_datetime
+    pending = frappe.get_all(
+        "SMS Webhook Delivery",
+        filters={
+            "status": ["in", ["Pending", "Failed"]],
+            "next_retry_at": ["<=", now_datetime()],
+        },
+        order_by="next_retry_at asc",
+        limit=20,
+        fields=["name"],
+    )
+    for item in pending:
+        try:
+            _process_webhook_delivery(item.name)
+        except Exception:
+            frappe.log_error(title="Webhook Delivery: {}".format(item.name))
+    frappe.db.commit()
+
+
+def _process_webhook_delivery(delivery_name):
+    delivery = frappe.get_doc("SMS Webhook Delivery", delivery_name)
+    if delivery.status == "Sent":
+        return
+    if cint(delivery.attempts) >= cint(delivery.max_attempts):
+        delivery.status = "Failed"
+        delivery.save(ignore_permissions=True)
+        return
+
+    headers = {}
+    if delivery.headers:
+        try:
+            headers = json.loads(delivery.headers)
+        except (ValueError, TypeError):
+            pass
+    if "Content-Type" not in headers:
+        headers["Content-Type"] = "application/json"
+
+    payload = delivery.payload or "{}"
+
+    try:
+        resp = requests.post(delivery.url, data=payload, headers=headers, timeout=30)
+        delivery.response_code = resp.status_code
+        delivery.response_body = resp.text[:2000] if resp.text else ""
+        delivery.attempts = cint(delivery.attempts) + 1
+        delivery.last_retry_at = now()
+
+        if 200 <= resp.status_code < 300:
+            delivery.status = "Sent"
+        else:
+            _set_webhook_retry(delivery)
+    except requests.exceptions.RequestException as e:
+        delivery.attempts = cint(delivery.attempts) + 1
+        delivery.last_retry_at = now()
+        delivery.error_message = str(e)[:2000]
+        _set_webhook_retry(delivery)
+
+    delivery.save(ignore_permissions=True)
+
+
+def _set_webhook_retry(delivery):
+    from frappe.utils import add_to_date
+    if cint(delivery.attempts) >= cint(delivery.max_attempts):
+        delivery.status = "Failed"
+        return
+    base_delay = cint(delivery.base_delay) or 30
+    delay_seconds = base_delay * (2 ** (cint(delivery.attempts) - 1))
+    delivery.next_retry_at = add_to_date(now(), seconds=delay_seconds)
+    delivery.status = "Pending"
+
 
 def process_bulk_messages():
     active_bulks = frappe.get_all(

@@ -126,11 +126,10 @@ class SMSNotification(Document):
     # ─── Shared helpers ──────────────────────────────────────────────
 
     def _render_message(self, doc):
-        """Render message from linked template or inline message_template.
+        """Render message based on template_type.
 
-        Supports two syntaxes:
-        1. Jinja2: {{ doc.field_name }} — rendered via Jinja2
-        2. Positional: {{1}}, {{2}} — replaced from the ``fields`` child table
+        Jinja:     {{ doc.field_name }} rendered via Jinja2
+        Parameter: {{1}}, {{2}} replaced from the ``fields`` child table (no Jinja)
         """
         if self.template:
             try:
@@ -138,6 +137,8 @@ class SMSNotification(Document):
                 body = template_doc.message_template or ""
                 if not body:
                     return ""
+                if self.template_type == "Parameter":
+                    return self._replace_positional_params(body, doc).strip()
                 body = self._replace_positional_params(body, doc)
                 from jinja2 import Template
                 tmpl = Template(body)
@@ -149,6 +150,8 @@ class SMSNotification(Document):
         message_template = self.message_template
         if not message_template:
             return ""
+        if self.template_type == "Parameter":
+            return self._replace_positional_params(message_template, doc).strip()
         message_template = self._replace_positional_params(message_template, doc)
         from jinja2 import Template
         tmpl = Template(message_template)

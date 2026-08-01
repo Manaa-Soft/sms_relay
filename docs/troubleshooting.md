@@ -28,6 +28,21 @@ frappe.get_all("SMS Outbox", filters={"status": ["!=", "Sent"]}, limit=10)
 frappe.get_all("SMS Log", order_by="creation desc", limit=10, fields=["name", "phone", "status", "delivery_status", "error_message"])
 ```
 
+### Check webhook delivery queue
+```python
+frappe.get_all("SMS Webhook Delivery", filters={"status": ["!=", "Sent"]}, limit=10, fields=["name", "url", "status", "attempts", "next_retry_at"])
+```
+
+### Check scheduled messages
+```python
+frappe.get_all("SMS Queue", filters={"status": "Queued", "scheduled_at": ["is", "set"]}, limit=10, fields=["name", "recipient", "scheduled_at", "ttl_seconds"])
+```
+
+### Check message history
+```python
+frappe.get_all("SMS Log", order_by="creation desc", limit=10, fields=["name", "phone", "status", "message_id", "device_id"])
+```
+
 ### Check opt-out list
 ```python
 frappe.get_all("SMS Opt Out", filters={"opted_out": 1}, limit=10)
@@ -171,6 +186,49 @@ curl -X POST http://YOUR-FRAPPE-SITE/api/method/sms_relay.api.webhook_receiver.i
 1. Increase `global_rate_limit` in SMS Gateway Settings
 2. Add more devices to distribute load
 3. Increase hourly/daily quotas on devices
+4. Adjust `send_interval_min`/`send_interval_max` for gradual sending
+
+---
+
+### Messages expiring (TTL)
+
+**Causes:**
+1. `ttl_seconds` set too low
+2. `valid_until` time already passed
+3. Queue processing delayed (scheduler not running)
+
+**Fix:**
+1. Increase `ttl_seconds` or remove it
+2. Set `valid_until` further in the future
+3. Check scheduler: `bench doctor`
+4. Manually trigger: `bench execute sms_relay.tasks.process_sms_queue`
+
+---
+
+### Messages stuck in "Cancelled" status
+
+**Causes:**
+1. Cancelled via `cancel_message` API
+2. Cancelled by webhook `sms:cancelled` event
+3. Opted-out recipient
+
+**Fix:** This is expected behavior. Cancelled messages cannot be unsent. Re-queue with `retry_sms` if needed.
+
+---
+
+### Webhook deliveries failing repeatedly
+
+**Causes:**
+1. Frappe site unreachable from webhook source
+2. Wrong webhook URL in server config.yml
+3. Firewall blocking incoming connections
+4. HMAC secret mismatch
+
+**Fix:**
+1. Check `SMS Webhook Delivery` list for failed entries
+2. Verify webhook URL: `http://YOUR-FRAPPE-SITE/api/method/sms_relay.api.webhook_receiver.incoming_webhook`
+3. Test: `curl -X POST http://YOUR-FRAPPE-SITE/api/method/sms_relay.api.webhook_receiver.incoming_webhook -H "Content-Type: application/json" -d '{"event": "system:ping"}'`
+4. Check firewall allows incoming connections
 
 ---
 
@@ -179,8 +237,9 @@ curl -X POST http://YOUR-FRAPPE-SITE/api/method/sms_relay.api.webhook_receiver.i
 | Log | Location | What it contains |
 |---|---|---|
 | SMS Log | SMS Relay → SMS Log | Complete SMS history with delivery status |
-| SMS Queue | SMS Relay → SMS Queue | Pending/failed messages |
+| SMS Queue | SMS Relay → SMS Queue | Pending/failed/scheduled messages |
 | SMS Outbox | SMS Relay → SMS Outbox | Retry queue with backoff |
+| SMS Webhook Delivery | SMS Relay → SMS Webhook Delivery | Failed webhook retry queue |
 | SMS Bulk Message | SMS Relay → SMS Bulk Message | Campaign status and counts |
 | SMS Notification Log | SMS Relay → SMS Notification Log | Notification delivery audit |
 | Error Log | Setup → Error Log | Frappe error logs (search "SMS Relay") |

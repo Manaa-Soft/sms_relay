@@ -43,8 +43,10 @@ doc_events = {
 scheduler_events = {
     "all": [
         "sms_relay.tasks.process_sms_queue",
+        "sms_relay.tasks.process_scheduled_messages",
         "sms_relay.tasks.process_outbox",
         "sms_relay.tasks.process_bulk_messages",
+        "sms_relay.tasks.process_webhook_deliveries",
         "sms_relay.utils.trigger_sms_notifications_all",
     ],
     "hourly": [

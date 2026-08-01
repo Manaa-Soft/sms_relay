@@ -109,7 +109,8 @@ def connect_device(device_name=None):
 
 
 @frappe.whitelist()
-def send_sms_now(recipient=None, message=None, template=None, device=None, sim=None):
+def send_sms_now(recipient=None, message=None, template=None, device=None, sim=None,
+                 message_id=None, ttl_seconds=None, valid_until=None, schedule_at=None):
     if not recipient:
         frappe.throw(_("Recipient is required"))
     if not message and not template:
@@ -127,8 +128,16 @@ def send_sms_now(recipient=None, message=None, template=None, device=None, sim=N
         message = _render_template(template, {"recipient_list": phone_list})
     if not message:
         frappe.throw(_("Message cannot be empty"))
+
+    # Idempotency check
+    if message_id:
+        existing = frappe.db.exists("SMS Log", {"message_id": message_id, "status": "Sent"})
+        if existing:
+            return {"status": "already_sent", "recipients": phone_list, "message_id": message_id}
+
     from sms_relay.core.sms_engine import send_sms
-    send_sms(phone_list, message, sender="")
+    send_sms(phone_list, message, sender="", message_id=message_id,
+             ttl_seconds=ttl_seconds, valid_until=valid_until, schedule_at=schedule_at)
     return {"status": "sent", "recipients": phone_list, "message_length": len(message)}
 
 
@@ -264,4 +273,180 @@ def get_notification_preview(notification_name=None, doc_type=None, doc_name=Non
         "event": notification.event,
         "message": rendered,
         "sms_info": count_sms_parts(rendered) if rendered else None,
+    }
+
+
+@frappe.whitelist()
+def cancel_message(queue_name=None):
+    """Cancel a queued SMS message before it is sent."""
+    if not queue_name:
+        frappe.throw(_("Queue name is required"))
+    from sms_relay.core.sms_engine import cancel_message as _cancel
+    return _cancel(queue_name)
+
+
+@frappe.whitelist()
+def get_message_history(from_date=None, to_date=None, status=None, device=None, phone=None, limit=50, offset=0):
+    """Get SMS message history with filtering."""
+    filters = []
+    if from_date:
+        filters.append(["creation", ">=", from_date])
+    if to_date:
+        filters.append(["creation", "<=", to_date])
+    if status:
+        filters.append(["status", "=", status])
+    if device:
+        filters.append(["device", "=", device])
+    if phone:
+        filters.append(["phone", "like", "%{}%".format(phone)])
+
+    logs = frappe.get_all(
+        "SMS Log",
+        filters=filters,
+        fields=["name", "phone", "recipient_name", "message", "status", "delivery_status",
+                "device", "device_id", "gateway_message_id", "message_id",
+                "queued_at", "sent_at", "delivered_at", "error_message", "creation"],
+        order_by="creation desc",
+        limit=cint(limit),
+        start=cint(offset),
+    )
+    total = frappe.db.count("SMS Log", filters=filters)
+    return {"messages": logs, "total": total, "limit": cint(limit), "offset": cint(offset)}
+
+
+@frappe.whitelist()
+def get_inbox(from_date=None, to_date=None, phone=None, limit=50, offset=0):
+    """Get incoming SMS messages with filtering."""
+    filters = [["status", "=", "Received"]]
+    if from_date:
+        filters.append(["creation", ">=", from_date])
+    if to_date:
+        filters.append(["creation", "<=", to_date])
+    if phone:
+        filters.append(["recipient", "like", "%{}%".format(phone)])
+
+    messages = frappe.get_all(
+        "SMS Queue",
+        filters=filters,
+        fields=["name", "recipient", "message", "status", "creation",
+                "reference_doctype", "reference_name"],
+        order_by="creation desc",
+        limit=cint(limit),
+        start=cint(offset),
+    )
+    total = frappe.db.count("SMS Queue", filters=filters)
+    return {"messages": messages, "total": total, "limit": cint(limit), "offset": cint(offset)}
+
+
+@frappe.whitelist()
+def get_device_settings(device_name=None):
+    """Get device settings from the gateway."""
+    if not device_name:
+        frappe.throw(_("Device name is required"))
+    device = frappe.get_doc("SMS Device", device_name)
+    base_url = (device.server_url or "").rstrip("/")
+    if not base_url:
+        return {"success": False, "error": "No server URL configured"}
+    settings = get_relay_settings()
+    headers, auth = _get_gateway_auth(settings, device)
+    try:
+        resp = requests.get(
+            "{}/api/mobile/v1/settings".format(base_url),
+            headers=headers, auth=auth, timeout=15,
+        )
+        if resp.status_code == 200:
+            return {"success": True, "settings": resp.json()}
+        return {"success": False, "error": "HTTP {}: {}".format(resp.status_code, resp.text[:200])}
+    except requests.exceptions.RequestException as e:
+        return {"success": False, "error": str(e)[:200]}
+
+
+@frappe.whitelist()
+def update_device_settings(device_name=None, settings_json=None):
+    """Update device settings on the gateway."""
+    if not device_name:
+        frappe.throw(_("Device name is required"))
+    if not settings_json:
+        frappe.throw(_("Settings JSON is required"))
+    device = frappe.get_doc("SMS Device", device_name)
+    base_url = (device.server_url or "").rstrip("/")
+    if not base_url:
+        return {"success": False, "error": "No server URL configured"}
+    settings = get_relay_settings()
+    headers, auth = _get_gateway_auth(settings, device)
+    if isinstance(settings_json, str):
+        try:
+            settings_json = json.loads(settings_json)
+        except (ValueError, TypeError):
+            return {"success": False, "error": "Invalid JSON"}
+    try:
+        resp = requests.put(
+            "{}/api/mobile/v1/settings".format(base_url),
+            json=settings_json,
+            headers=headers, auth=auth, timeout=15,
+        )
+        if resp.status_code in (200, 204):
+            return {"success": True}
+        return {"success": False, "error": "HTTP {}: {}".format(resp.status_code, resp.text[:200])}
+    except requests.exceptions.RequestException as e:
+        return {"success": False, "error": str(e)[:200]}
+
+
+@frappe.whitelist()
+def get_structured_health():
+    """Get structured health check results for all devices."""
+    devices = frappe.get_all(
+        "SMS Device",
+        filters={"is_active": 1},
+        fields=["name", "device_name", "is_active", "is_online", "battery_level",
+                "signal_strength", "carrier_name", "device_model", "app_version",
+                "sim_phone_number", "hourly_quota", "daily_quota"],
+    )
+    checks = []
+    for device in devices:
+        sent_today = frappe.db.count(
+            "SMS Log",
+            filters={"device": device.name, "status": "Sent", "creation": [">=", frappe.utils.getdate()]},
+        )
+        failed_today = frappe.db.count(
+            "SMS Log",
+            filters={"device": device.name, "status": "Failed", "creation": [">=", frappe.utils.getdate()]},
+        )
+        status = "pass"
+        if not device.is_online:
+            status = "fail"
+        elif device.battery_level is not None and device.battery_level < 20:
+            status = "warn"
+        elif failed_today > sent_today and sent_today > 0:
+            status = "warn"
+
+        checks.append({
+            "name": device.name,
+            "device_name": device.device_name,
+            "status": status,
+            "is_online": device.is_online,
+            "battery_level": device.battery_level,
+            "signal_strength": device.signal_strength,
+            "carrier_name": device.carrier_name,
+            "device_model": device.device_model,
+            "app_version": device.app_version,
+            "sent_today": sent_today,
+            "failed_today": failed_today,
+            "failure_rate": "{:.1f}%".format((failed_today / max(sent_today + failed_today, 1)) * 100),
+            "quota_usage": "{:.1f}%".format((sent_today / max(device.daily_quota, 1)) * 100),
+        })
+
+    overall_status = "pass"
+    for check in checks:
+        if check["status"] == "fail":
+            overall_status = "fail"
+            break
+        if check["status"] == "warn":
+            overall_status = "warn"
+
+    return {
+        "status": overall_status,
+        "checks": checks,
+        "total_devices": len(checks),
+        "online_devices": sum(1 for c in checks if c["is_online"]),
     }
