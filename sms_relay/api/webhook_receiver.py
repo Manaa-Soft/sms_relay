@@ -1,3 +1,4 @@
+import hashlib
 import json
 import frappe
 from frappe import _
@@ -220,13 +221,16 @@ def _handle_incoming_sms(data, event_type="sms:received"):
 
     _mark_webhook_seen(data, "incoming")
 
+def _webhook_cache_key(prefix, data):
+    # SHA-256 of canonical JSON: stable across processes/workers unlike hash().
+    digest = hashlib.sha256(json.dumps(data, sort_keys=True).encode("utf-8")).hexdigest()
+    return "webhook_{}_{}".format(prefix, digest)
+
 def _is_duplicate_webhook(data, prefix):
-    cache_key = "webhook_{}_{}".format(prefix, hash(json.dumps(data, sort_keys=True)))
-    return bool(frappe.cache().get_value(cache_key))
+    return bool(frappe.cache().get_value(_webhook_cache_key(prefix, data)))
 
 def _mark_webhook_seen(data, prefix):
     # TTL must outlive the full signature freshness window (max_age 900s plus
     # 60s future skew) so a replayed webhook can't pass signature checks after
     # the marker expires.
-    cache_key = "webhook_{}_{}".format(prefix, hash(json.dumps(data, sort_keys=True)))
-    frappe.cache().set_value(cache_key, True, expires_in_sec=900 + 60)
+    frappe.cache().set_value(_webhook_cache_key(prefix, data), True, expires_in_sec=900 + 60)
