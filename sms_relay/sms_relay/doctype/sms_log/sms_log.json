@@ -93,12 +93,19 @@
    "fieldtype": "Section Break",
    "label": "Gateway Info"
   },
-  {
-   "fieldname": "gateway_message_id",
-   "fieldtype": "Data",
-   "label": "Gateway Message ID",
-   "read_only": 1
-  },
+   {
+    "fieldname": "gateway_message_id",
+    "fieldtype": "Data",
+    "label": "Gateway Message ID",
+    "read_only": 1
+   },
+   {
+    "fieldname": "sms_parts",
+    "fieldtype": "Int",
+    "label": "SMS Parts",
+    "read_only": 1,
+    "description": "Actual multipart segment count reported by the gateway (sms:sent)"
+   },
   {
    "fieldname": "device",
    "fieldtype": "Link",

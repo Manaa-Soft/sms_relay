@@ -7,6 +7,7 @@ from sms_relay.core.sms_utils import (
     is_opted_out,
     validate_phone_list,
     verify_webhook_signature,
+    verify_gateway_signature,
     format_for_display,
 )
 
@@ -211,6 +212,41 @@ class TestVerifyWebhookSignature(SMSRelayTestCase):
 
     def test_empty_signature(self):
         self.assertFalse(verify_webhook_signature(b"data", "secret", ""))
+
+
+class TestVerifyGatewaySignature(SMSRelayTestCase):
+    """Test the Android SMS Gateway app webhook signing scheme.
+
+    The app signs HMAC-SHA256 over ``<raw body><timestamp>`` and sends the hex
+    digest in ``X-Signature`` plus the unix timestamp in ``X-Timestamp``.
+    """
+
+    def test_valid_signature(self):
+        import time
+        import hmac
+        import hashlib
+        secret = "test-secret"
+        body = b'{"event": "sms:received"}'
+        ts = str(int(time.time()))
+        sig = hmac.new(secret.encode("utf-8"), body + ts.encode("utf-8"), hashlib.sha256).hexdigest()
+        self.assertTrue(verify_gateway_signature(body, secret, sig, ts))
+
+    def test_invalid_signature(self):
+        import time
+        self.assertFalse(verify_gateway_signature(b"data", "secret", "bad-sig", str(int(time.time()))))
+
+    def test_missing_timestamp(self):
+        self.assertFalse(verify_gateway_signature(b"data", "secret", "sig", None))
+
+    def test_stale_timestamp_rejected(self):
+        import time
+        import hmac
+        import hashlib
+        secret = "test-secret"
+        body = b'{"event": "sms:received"}'
+        ts = str(int(time.time()) - 7200)  # 2 hours old, exceeds the 900s window
+        sig = hmac.new(secret.encode("utf-8"), body + ts.encode("utf-8"), hashlib.sha256).hexdigest()
+        self.assertFalse(verify_gateway_signature(body, secret, sig, ts))
 
 
 class TestFormatForDisplay(SMSRelayTestCase):
