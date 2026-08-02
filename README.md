@@ -272,22 +272,34 @@ frappe.call({
 
 ### Webhook
 
+The Android SMS Gateway **app sends webhooks directly** (server pushes aren't required) with this envelope:
+
 ```
 POST http://your-frappe-site/api/method/sms_relay.api.webhook_receiver.incoming_webhook
 
 {
+    "id": "unique-webhook-event-id",
+    "webhookId": "webhook-config-id",
     "event": "sms:delivered",
-    "id": "message-id",
-    "sender": "+1234567890"
+    "deviceId": "device-id",
+    "payload": {
+        "messageId": "gateway-message-id",
+        "recipient": "+1234567890",
+        "phoneNumber": "+1234567890"
+    }
 }
 ```
 
+Event fields (`sender`, `message`, `simNumber`, `reason`, `partsCount`, `simCards`, …) are nested inside `payload`; `event` and `deviceId` are on the envelope. Delivery/cancel reports are correlated via `payload.messageId` ↔ `SMS Log.gateway_message_id`.
+
 Supported events: `sms:delivered`, `sms:failed`, `sms:sent`, `sms:cancelled`, `sms:received`, `sms:data-received`, `mms:received`, `mms:downloaded`, `app:started`, `system:ping`
 
-**Webhook signatures** — if `Webhook HMAC Secret` is configured, both signature schemes are accepted:
+**Webhook signatures** — the app signs every webhook by default (it auto-generates a random key). To verify, set **Webhook HMAC Secret** in SMS Relay Settings to the app's signing key (App settings → Webhooks → signing key). Both schemes are accepted:
 
-1. **Android SMS Gateway app** (recommended): the app sends `X-Signature` (HMAC-SHA256 hex of `<raw body><timestamp>`) plus `X-Timestamp` (unix seconds). Timestamps older than 15 minutes or more than 60 seconds in the future are rejected.
+1. **Android SMS Gateway app** (recommended): the app sends `X-Signature` (HMAC-SHA256 hex of `<raw body><timestamp>`) plus `X-Timestamp` (unix seconds). Timestamps older than 15 minutes or more than 60 seconds in the future are rejected — keep device clocks in sync.
 2. **Legacy**: `X-Webhook-Signature` (HMAC-SHA256 hex of the raw body only).
+
+**Multi-device note:** the signing key is per-device. With more than one phone, set the same signing key on all of them (or leave `Webhook HMAC Secret` empty to skip verification — idempotency still dedupes replays).
 
 `app:started` refreshes the matching SMS Device heartbeat and SIM info (phone number, carrier). `mms:*` and `sms:data-received` are stored as received messages. Delivery reports capture failure `reason` → `error_message` and `partsCount` → `SMS Parts`.
 

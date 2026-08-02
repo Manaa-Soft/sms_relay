@@ -232,15 +232,20 @@ server:
 
 ### HMAC Signature Verification
 
-If `Webhook HMAC Secret` is configured, incoming webhooks are verified with **either** scheme:
+The Android SMS Gateway **app signs every webhook by default** (it auto-generates a random signing key). To enable verification:
+
+1. Open the app → **Webhooks** settings and copy the **signing key**.
+2. Paste it into **SMS Relay Settings → Webhook HMAC Secret**.
+
+The receiver accepts **either** scheme:
 
 1. **Android SMS Gateway app** (recommended) — the app sends:
    - `X-Signature` = `HMAC-SHA256(secret, raw_body + X-Timestamp)` (hex)
    - `X-Timestamp` = unix seconds
-   Freshness window: `now - 900s ≤ ts ≤ now + 60s`.
+   Freshness window: `now - 900s ≤ ts ≤ now + 60s`. Keep device clocks in sync, or signed webhooks will be rejected.
 2. **Legacy** — `X-Webhook-Signature` = `HMAC-SHA256(secret, raw_body)` (hex)
 
-Set the same secret in the app's webhook configuration and in **SMS Relay Settings → Webhook HMAC Secret**.
+> **Multi-device:** the signing key is per-device. With more than one phone, set the same signing key on all of them, or leave `Webhook HMAC Secret` empty (verification is skipped; idempotency still dedupes replays).
 
 ---
 

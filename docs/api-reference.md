@@ -475,55 +475,98 @@ Public endpoint for receiving delivery receipts and incoming SMS.
 
 **Authentication:** None (allow_guest=True), optional HMAC-SHA256
 
+### Request Envelope
+
+The Android SMS Gateway **app** POSTs an envelope (webhooks are sent directly from the phone, not relayed by the server):
+
+```json
+{
+    "id": "unique-webhook-event-id",
+    "webhookId": "webhook-config-id",
+    "event": "sms:received",
+    "deviceId": "device-001",
+    "payload": {
+        "messageId": "gateway-message-id",
+        "sender": "+1234567890",
+        "message": "STOP",
+        "simNumber": 1,
+        "receivedAt": "2026-08-01T09:00:00Z"
+    }
+}
+```
+
+- `event` and `deviceId` live on the envelope; all event fields are nested inside `payload`.
+- Delivery/cancel reports are correlated via `payload.messageId` ↔ `SMS Log.gateway_message_id` (and `SMS Queue.gateway_message_id`, falling back to `name`).
+- Plain (non-envelope) bodies are still accepted for backward compatibility.
+
 ### Signature Verification
 
-If `Webhook HMAC Secret` is configured, the endpoint accepts **either** scheme:
+The app signs **every** webhook by default with an auto-generated key. To verify, set **Webhook HMAC Secret** in SMS Relay Settings to the app's signing key. If `Webhook HMAC Secret` is configured, the endpoint accepts **either** scheme:
 
 1. **Android SMS Gateway app** (recommended) — headers `X-Signature` + `X-Timestamp`:
-   `X-Signature = HMAC-SHA256(secret, raw_body + X-Timestamp)` where `X-Timestamp` is unix seconds. Freshness window: `now - 900s ≤ ts ≤ now + 60s`.
+   `X-Signature = HMAC-SHA256(secret, raw_body + X-Timestamp)` where `X-Timestamp` is unix seconds. Freshness window: `now - 900s ≤ ts ≤ now + 60s`. Keep device clocks in sync.
 2. **Legacy** — header `X-Webhook-Signature`:
    `X-Webhook-Signature = HMAC-SHA256(secret, raw_body)`.
+
+> **Multi-device:** the signing key is per-device. With more than one phone, either set the same signing key on all of them or leave `Webhook HMAC Secret` empty (idempotency still dedupes replays).
 
 ### Delivery Report
 
 ```json
 {
+    "id": "unique-webhook-event-id",
+    "webhookId": "webhook-config-id",
     "event": "sms:delivered",
-    "id": "message-id-from-gateway",
-    "sender": "+1234567890"
+    "deviceId": "device-001",
+    "payload": {
+        "messageId": "gateway-message-id",
+        "recipient": "+1234567890",
+        "phoneNumber": "+1234567890"
+    }
 }
 ```
 
-`sms:failed` may include `reason` (stored in `SMS Log.error_message`); `sms:sent` may include `partsCount` (stored in `SMS Log.sms_parts`).
+`sms:failed` payload may include `reason` (stored in `SMS Log.error_message`); `sms:sent` payload may include `partsCount` (stored in `SMS Log.sms_parts`).
 
 ### Incoming SMS
 
 ```json
 {
+    "id": "unique-webhook-event-id",
+    "webhookId": "webhook-config-id",
     "event": "sms:received",
-    "sender": "+1234567890",
-    "message": "STOP",
-    "simNumber": 1,
-    "receivedAt": "2026-08-01T09:00:00Z",
-    "profileName": "John Doe"
+    "deviceId": "device-001",
+    "payload": {
+        "messageId": "gateway-message-id",
+        "sender": "+1234567890",
+        "recipient": null,
+        "simNumber": 1,
+        "phoneNumber": "+1234567890",
+        "message": "STOP",
+        "receivedAt": "2026-08-01T09:00:00Z"
+    }
 }
 ```
 
-Canonical fields: `sender` (fallbacks `phone`/`from`/`phoneNumber`), `simNumber` (→ `SMS Queue.sim_number`), `receivedAt`.
+Canonical fields (inside `payload`): `sender` (fallbacks `phone`/`from`/`phoneNumber`), `simNumber` (→ `SMS Queue.sim_number`), `receivedAt`.
 
 ### Data SMS / MMS
 
-`sms:data-received` (raw `data`), `mms:received` (`subject`, `size`), `mms:downloaded` (`body`, `attachments[].name`) are all stored as received messages.
+`sms:data-received` (`payload.data`), `mms:received` (`payload.subject`, `payload.size`), `mms:downloaded` (`payload.body`, `payload.attachments[].name`) are all stored as received messages.
 
 ### App Started
 
 ```json
 {
+    "id": "unique-webhook-event-id",
+    "webhookId": "webhook-config-id",
     "event": "app:started",
     "deviceId": "device-001",
-    "simCards": [
-        {"slotIndex": 0, "simNumber": 1, "phoneNumber": "+1234567890", "carrierName": "Test Carrier", "iccid": "..."}
-    ]
+    "payload": {
+        "simCards": [
+            {"slotIndex": 0, "simNumber": 1, "phoneNumber": "+1234567890", "carrierName": "Test Carrier", "iccid": "..."}
+        ]
+    }
 }
 ```
 

@@ -34,31 +34,32 @@ def incoming_webhook():
             frappe.throw(_("Invalid webhook signature"), frappe.ValidationError)
             return
 
-    event_type = data.get("event") or data.get("type") or ""
+    event_data = _event_data(data)
+    event_type = event_data.get("event") or data.get("event") or data.get("type") or ""
 
     if event_type == "system:ping":
         return {"status": "ok"}
 
     if event_type == "app:started":
-        _handle_app_started(data)
+        _handle_app_started(event_data)
         return {"status": "processed"}
 
     if event_type in ("sms:delivered", "sms:sent", "sms:failed"):
-        _handle_delivery_report(data, event_type)
+        _handle_delivery_report(event_data, event_type)
         return {"status": "processed"}
 
     if event_type == "sms:cancelled":
-        _handle_cancelled_report(data)
+        _handle_cancelled_report(event_data)
         return {"status": "processed"}
 
     if event_type in ("sms:received", "sms:data-received", "mms:received", "mms:downloaded", "incoming"):
-        _handle_incoming_sms(data, event_type)
+        _handle_incoming_sms(event_data, event_type)
         return {"status": "processed"}
 
-    phone = data.get("sender") or data.get("phone") or data.get("from") or data.get("phoneNumber")
-    message = data.get("message") or data.get("text") or data.get("body") or data.get("subject") or data.get("data")
+    phone = event_data.get("sender") or event_data.get("phone") or event_data.get("from") or event_data.get("phoneNumber")
+    message = event_data.get("message") or event_data.get("text") or event_data.get("body") or event_data.get("subject") or event_data.get("data")
     if phone and message:
-        _handle_incoming_sms(data, event_type)
+        _handle_incoming_sms(event_data, event_type)
         return {"status": "processed"}
 
     frappe.log_error(
@@ -66,8 +67,27 @@ def incoming_webhook():
     )
     return {"status": "ignored"}
 
+def _event_data(data):
+    """Unwrap the Android SMS Gateway webhook envelope.
+
+    The app POSTs ``{id, webhookId, event, deviceId, payload}``; the actual
+    event fields live inside ``payload``. Returns a flat dict for handlers
+    (with envelope ``deviceId`` and the unique ``webhook_event_id`` merged in).
+    Falls back to the raw body for legacy/plain payloads.
+    """
+    if not isinstance(data, dict):
+        return data
+    nested = data.get("payload")
+    if not isinstance(nested, dict):
+        return data
+    event_data = dict(nested)
+    event_data.setdefault("event", data.get("event"))
+    event_data.setdefault("deviceId", data.get("deviceId"))
+    event_data.setdefault("webhook_event_id", data.get("id"))
+    return event_data
+
 def _handle_delivery_report(data, event_type):
-    message_id = data.get("id") or data.get("messageId") or data.get("message_id")
+    message_id = data.get("messageId") or data.get("id") or data.get("message_id")
     status_map = {
         "sms:delivered": "Delivered",
         "sms:sent": "Sent",
@@ -79,7 +99,10 @@ def _handle_delivery_report(data, event_type):
         return
 
     if message_id:
-        frappe.db.set_value("SMS Queue", {"name": message_id}, "status", new_status)
+        if frappe.db.exists("SMS Queue", {"gateway_message_id": message_id}):
+            frappe.db.set_value("SMS Queue", {"gateway_message_id": message_id}, "status", new_status)
+        else:
+            frappe.db.set_value("SMS Queue", {"name": message_id}, "status", new_status)
         log_name = frappe.db.get_value("SMS Log", {"gateway_message_id": message_id}, "name")
         if log_name:
             fields = {
@@ -100,17 +123,20 @@ def _handle_delivery_report(data, event_type):
     _mark_webhook_seen(data, "delivery_report_{}".format(event_type))
 
 def _handle_cancelled_report(data):
-    message_id = data.get("id") or data.get("messageId") or data.get("message_id")
+    message_id = data.get("messageId") or data.get("id") or data.get("message_id")
     if message_id:
-        frappe.db.set_value("SMS Queue", {"gateway_message_id": message_id}, "status", "Cancelled")
+        if frappe.db.exists("SMS Queue", {"gateway_message_id": message_id}):
+            frappe.db.set_value("SMS Queue", {"gateway_message_id": message_id}, "status", "Cancelled")
+        else:
+            frappe.db.set_value("SMS Queue", {"name": message_id}, "status", "Cancelled")
         frappe.db.set_value("SMS Log", {"gateway_message_id": message_id}, "status", "Cancelled")
         frappe.db.commit()
 
 def _handle_app_started(data):
     """App booted on a phone — refresh the matching SMS Device heartbeat/SIM info.
 
-    Payload (Android SMS Gateway `app:started`): ``{ deviceId, simCards: [{
-    slotIndex, simNumber, phoneNumber, carrierName, iccid }] }``.
+    Payload (Android SMS Gateway `app:started`): ``{ deviceId, payload: {
+    simCards: [{ slotIndex, simNumber, phoneNumber, carrierName, iccid }] } }``.
     """
     device_id = data.get("deviceId") or data.get("device_id") or ""
     sim_cards = data.get("simCards") or data.get("sim_cards") or []
@@ -222,7 +248,11 @@ def _handle_incoming_sms(data, event_type="sms:received"):
     _mark_webhook_seen(data, "incoming")
 
 def _webhook_cache_key(prefix, data):
-    # SHA-256 of canonical JSON: stable across processes/workers unlike hash().
+    # Prefer the gateway event id (unique, stable across retries); otherwise
+    # SHA-256 of canonical JSON (stable across processes/workers unlike hash()).
+    event_id = data.get("webhook_event_id") if isinstance(data, dict) else None
+    if event_id:
+        return "webhook_{}_{}".format(prefix, event_id)
     digest = hashlib.sha256(json.dumps(data, sort_keys=True).encode("utf-8")).hexdigest()
     return "webhook_{}_{}".format(prefix, digest)
 

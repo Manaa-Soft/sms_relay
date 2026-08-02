@@ -50,7 +50,7 @@ class TestDeliveryReport(SMSRelayTestCase):
 
         _handle_delivery_report({"id": "gw-001", "phoneNumber": "+15551234567"}, "sms:delivered")
         queue.reload()
-        self.assertEqual(queue.status, "Sent")
+        self.assertEqual(queue.status, "Delivered")
 
     def test_cancelled_status(self):
         queue = frappe.new_doc("SMS Queue")
@@ -228,3 +228,91 @@ class TestWebhookDeliveryQueue(SMSRelayTestCase):
         )
         count_after = frappe.db.count("SMS Webhook Delivery", {"status": "Pending"})
         self.assertGreater(count_after, count_before)
+
+
+class TestWebhookEnvelope(SMSRelayTestCase):
+    """The Android SMS Gateway app POSTs an envelope::
+
+        {id, webhookId, event, deviceId, payload}
+
+    where the event fields live inside ``payload``.
+    """
+
+    def _post(self, body):
+        with patch("frappe.request.get_data", create=True, return_value=json.dumps(body)):
+            with patch("frappe.request.get_request_header", create=True, return_value=None):
+                return incoming_webhook()
+
+    def test_incoming_sms_from_payload(self):
+        count_before = frappe.db.count("SMS Queue", {"status": "Received"})
+        result = self._post({
+            "id": "evt-in-1",
+            "webhookId": "wh-1",
+            "event": "sms:received",
+            "deviceId": "app-device-1",
+            "payload": {
+                "messageId": "msg-in-1",
+                "sender": "+15551234567",
+                "recipient": None,
+                "simNumber": 1,
+                "phoneNumber": "+15551234567",
+                "message": "STOP",
+                "receivedAt": "2026-08-01T09:00:00Z",
+            },
+        })
+        count_after = frappe.db.count("SMS Queue", {"status": "Received"})
+        self.assertEqual(result, {"status": "processed"})
+        self.assertGreater(count_after, count_before)
+
+    def test_delivery_report_from_payload(self):
+        queue = frappe.new_doc("SMS Queue")
+        queue.recipient = "+15551234567"
+        queue.message = "Test"
+        queue.status = "Sent"
+        queue.gateway_message_id = "gw-env-1"
+        queue.insert(ignore_permissions=True)
+        frappe.db.commit()
+
+        result = self._post({
+            "id": "evt-del-1",
+            "webhookId": "wh-2",
+            "event": "sms:delivered",
+            "deviceId": "app-device-1",
+            "payload": {
+                "messageId": "gw-env-1",
+                "recipient": "+15551234567",
+                "phoneNumber": "+15551234567",
+            },
+        })
+        queue.reload()
+        self.assertEqual(result, {"status": "processed"})
+        self.assertEqual(queue.status, "Delivered")
+
+    def test_app_started_from_payload(self):
+        if frappe.db.exists("SMS Device", "Test Env Device"):
+            frappe.db.sql("DELETE FROM `tabSMS Device` WHERE name = %s", "Test Env Device")
+        dev = frappe.new_doc("SMS Device")
+        dev.device_name = "Test Env Device"
+        dev.device_id = "env-device-1"
+        dev.sim_number = 1
+        dev.is_active = 1
+        dev.insert(ignore_permissions=True)
+        frappe.db.commit()
+
+        result = self._post({
+            "id": "evt-app-1",
+            "webhookId": "wh-3",
+            "event": "app:started",
+            "deviceId": "env-device-1",
+            "payload": {
+                "simCards": [
+                    {"slotIndex": 0, "simNumber": 1, "phoneNumber": "+15551234567", "carrierName": "Env Carrier", "iccid": "iccid-1"},
+                ],
+            },
+        })
+        dev.reload()
+        self.assertEqual(result, {"status": "processed"})
+        self.assertEqual(dev.sim_phone_number, "+15551234567")
+        self.assertEqual(dev.carrier_name, "Env Carrier")
+        self.assertTrue(dev.is_online)
+        self.assertTrue(dev.last_heartbeat)
