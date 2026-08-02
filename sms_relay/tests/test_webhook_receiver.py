@@ -8,24 +8,32 @@ from sms_relay.api.webhook_receiver import (
     _handle_cancelled_report,
     _handle_incoming_sms,
     _handle_app_started,
-    _idempotency_check,
+    _is_duplicate_webhook,
+    _mark_webhook_seen,
     _enqueue_webhook_delivery,
 )
 
 
-class TestIdempotencyCheck(SMSRelayTestCase):
-    """Test webhook idempotency."""
+class TestIdempotency(SMSRelayTestCase):
+    """Test webhook idempotency markers."""
 
     def test_first_call_returns_false(self):
         frappe.cache().delete_value("webhook_test_prefix_abc")
-        result = _idempotency_check({"test": "abc"}, "test_prefix")
+        result = _is_duplicate_webhook({"test": "abc"}, "test_prefix")
         self.assertFalse(result)
 
     def test_second_call_returns_true(self):
         frappe.cache().delete_value("webhook_test_prefix_def")
-        _idempotency_check({"test": "def"}, "test_prefix")
-        result = _idempotency_check({"test": "def"}, "test_prefix")
+        _mark_webhook_seen({"test": "def"}, "test_prefix")
+        result = _is_duplicate_webhook({"test": "def"}, "test_prefix")
         self.assertTrue(result)
+
+    def test_delivery_event_types_do_not_collide(self):
+        payload = {"id": "gw-1"}
+        self.assertFalse(_is_duplicate_webhook(payload, "delivery_report_sms:sent"))
+        _mark_webhook_seen(payload, "delivery_report_sms:sent")
+        self.assertTrue(_is_duplicate_webhook(payload, "delivery_report_sms:sent"))
+        self.assertFalse(_is_duplicate_webhook(payload, "delivery_report_sms:delivered"))
 
 
 class TestDeliveryReport(SMSRelayTestCase):

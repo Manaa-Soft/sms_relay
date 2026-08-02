@@ -74,7 +74,7 @@ def _handle_delivery_report(data, event_type):
     }
     new_status = status_map.get(event_type, "Sent")
 
-    if _idempotency_check(data, "delivery_report"):
+    if _is_duplicate_webhook(data, "delivery_report_{}".format(event_type)):
         return
 
     if message_id:
@@ -95,6 +95,8 @@ def _handle_delivery_report(data, event_type):
                     fields["sms_parts"] = cint(parts)
             frappe.db.set_value("SMS Log", log_name, fields)
         frappe.db.commit()
+
+    _mark_webhook_seen(data, "delivery_report_{}".format(event_type))
 
 def _handle_cancelled_report(data):
     message_id = data.get("id") or data.get("messageId") or data.get("message_id")
@@ -200,7 +202,7 @@ def _handle_incoming_sms(data, event_type="sms:received"):
     if not phone or not message:
         return
 
-    if _idempotency_check(data, "incoming"):
+    if _is_duplicate_webhook(data, "incoming"):
         return
 
     from sms_relay.utils.contact_manager import create_communication
@@ -216,11 +218,15 @@ def _handle_incoming_sms(data, event_type="sms:received"):
 
     frappe.db.commit()
 
-def _idempotency_check(data, prefix):
-    # TTL matches verify_gateway_signature's default max_age (900s) so a
-    # replayed webhook can't pass signature checks after the cache expires.
+    _mark_webhook_seen(data, "incoming")
+
+def _is_duplicate_webhook(data, prefix):
     cache_key = "webhook_{}_{}".format(prefix, hash(json.dumps(data, sort_keys=True)))
-    if frappe.cache().get_value(cache_key):
-        return True
-    frappe.cache().set_value(cache_key, True, expires_in_sec=900)
-    return False
+    return bool(frappe.cache().get_value(cache_key))
+
+def _mark_webhook_seen(data, prefix):
+    # TTL must outlive the full signature freshness window (max_age 900s plus
+    # 60s future skew) so a replayed webhook can't pass signature checks after
+    # the marker expires.
+    cache_key = "webhook_{}_{}".format(prefix, hash(json.dumps(data, sort_keys=True)))
+    frappe.cache().set_value(cache_key, True, expires_in_sec=900 + 60)
