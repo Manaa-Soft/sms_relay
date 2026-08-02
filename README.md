@@ -278,11 +278,18 @@ POST http://your-frappe-site/api/method/sms_relay.api.webhook_receiver.incoming_
 {
     "event": "sms:delivered",
     "id": "message-id",
-    "phoneNumber": "+1234567890"
+    "sender": "+1234567890"
 }
 ```
 
-Supported events: `sms:delivered`, `sms:failed`, `sms:sent`, `sms:cancelled`, `sms:received`, `system:ping`
+Supported events: `sms:delivered`, `sms:failed`, `sms:sent`, `sms:cancelled`, `sms:received`, `sms:data-received`, `mms:received`, `mms:downloaded`, `app:started`, `system:ping`
+
+**Webhook signatures** — if `Webhook HMAC Secret` is configured, both signature schemes are accepted:
+
+1. **Android SMS Gateway app** (recommended): the app sends `X-Signature` (HMAC-SHA256 hex of `<raw body><timestamp>`) plus `X-Timestamp` (unix seconds). Timestamps older than 15 minutes or more than 60 seconds in the future are rejected.
+2. **Legacy**: `X-Webhook-Signature` (HMAC-SHA256 hex of the raw body only).
+
+`app:started` refreshes the matching SMS Device heartbeat and SIM info (phone number, carrier). `mms:*` and `sms:data-received` are stored as received messages. Delivery reports capture failure `reason` → `error_message` and `partsCount` → `SMS Parts`.
 
 ## Scheduled Jobs
 

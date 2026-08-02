@@ -1,4 +1,5 @@
 import re
+import time
 import hashlib
 import hmac
 import frappe
@@ -82,6 +83,34 @@ def verify_webhook_signature(payload_bytes, secret, signature):
             hashlib.sha256,
         ).hexdigest()
         return hmac.compare_digest(expected, signature)
+    except Exception:
+        return False
+
+def verify_gateway_signature(payload_bytes, secret, signature, timestamp=None, max_age=900):
+    """Verify the Android SMS Gateway app webhook signing scheme.
+
+    The app signs with HMAC-SHA256 over ``<raw body><timestamp>`` and sends the
+    hex digest in the ``X-Signature`` header plus the unix timestamp in
+    ``X-Timestamp`` (see PayloadSigningPlugin in the gateway source). This is
+    different from the legacy ``X-Webhook-Signature`` scheme which signs only the
+    raw body.
+    """
+    if not secret or not signature or timestamp is None:
+        return False
+    try:
+        ts = int(timestamp)
+    except (TypeError, ValueError):
+        return False
+    now_ts = int(time.time())
+    if now_ts < ts - 60 or now_ts - ts > max_age:
+        return False
+    try:
+        expected = hmac.new(
+            secret.encode("utf-8"),
+            payload_bytes + str(ts).encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
+        return hmac.compare_digest(expected, signature.lower())
     except Exception:
         return False
 

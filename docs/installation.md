@@ -38,7 +38,13 @@ server:
       events:
         - sms:delivered
         - sms:failed
+        - sms:sent
+        - sms:cancelled
         - sms:received
+        - sms:data-received
+        - mms:received
+        - mms:downloaded
+        - app:started
         - system:ping
 EOF
 

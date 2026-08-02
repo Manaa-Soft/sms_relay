@@ -220,17 +220,27 @@ server:
       events:
         - sms:delivered
         - sms:failed
+        - sms:sent
+        - sms:cancelled
         - sms:received
+        - sms:data-received
+        - mms:received
+        - mms:downloaded
+        - app:started
         - system:ping
 ```
 
 ### HMAC Signature Verification
 
-If `Webhook HMAC Secret` is configured:
+If `Webhook HMAC Secret` is configured, incoming webhooks are verified with **either** scheme:
 
-1. Device computes `HMAC-SHA256(secret, payload)`
-2. Sends signature in `X-Webhook-Signature` header
-3. Server verifies before processing
+1. **Android SMS Gateway app** (recommended) — the app sends:
+   - `X-Signature` = `HMAC-SHA256(secret, raw_body + X-Timestamp)` (hex)
+   - `X-Timestamp` = unix seconds
+   Freshness window: `now - 900s ≤ ts ≤ now + 60s`.
+2. **Legacy** — `X-Webhook-Signature` = `HMAC-SHA256(secret, raw_body)` (hex)
+
+Set the same secret in the app's webhook configuration and in **SMS Relay Settings → Webhook HMAC Secret**.
 
 ---
 

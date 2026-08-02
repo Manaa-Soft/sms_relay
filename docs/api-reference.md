@@ -475,26 +475,59 @@ Public endpoint for receiving delivery receipts and incoming SMS.
 
 **Authentication:** None (allow_guest=True), optional HMAC-SHA256
 
+### Signature Verification
+
+If `Webhook HMAC Secret` is configured, the endpoint accepts **either** scheme:
+
+1. **Android SMS Gateway app** (recommended) — headers `X-Signature` + `X-Timestamp`:
+   `X-Signature = HMAC-SHA256(secret, raw_body + X-Timestamp)` where `X-Timestamp` is unix seconds. Freshness window: `now - 900s ≤ ts ≤ now + 60s`.
+2. **Legacy** — header `X-Webhook-Signature`:
+   `X-Webhook-Signature = HMAC-SHA256(secret, raw_body)`.
+
 ### Delivery Report
 
 ```json
 {
     "event": "sms:delivered",
     "id": "message-id-from-gateway",
-    "phoneNumber": "+1234567890"
+    "sender": "+1234567890"
 }
 ```
+
+`sms:failed` may include `reason` (stored in `SMS Log.error_message`); `sms:sent` may include `partsCount` (stored in `SMS Log.sms_parts`).
 
 ### Incoming SMS
 
 ```json
 {
     "event": "sms:received",
-    "from": "+1234567890",
+    "sender": "+1234567890",
     "message": "STOP",
+    "simNumber": 1,
+    "receivedAt": "2026-08-01T09:00:00Z",
     "profileName": "John Doe"
 }
 ```
+
+Canonical fields: `sender` (fallbacks `phone`/`from`/`phoneNumber`), `simNumber` (→ `SMS Queue.sim_number`), `receivedAt`.
+
+### Data SMS / MMS
+
+`sms:data-received` (raw `data`), `mms:received` (`subject`, `size`), `mms:downloaded` (`body`, `attachments[].name`) are all stored as received messages.
+
+### App Started
+
+```json
+{
+    "event": "app:started",
+    "deviceId": "device-001",
+    "simCards": [
+        {"slotIndex": 0, "simNumber": 1, "phoneNumber": "+1234567890", "carrierName": "Test Carrier", "iccid": "..."}
+    ]
+}
+```
+
+Updates the matching `SMS Device` (by `device_id`): `is_online`, `last_heartbeat`, and SIM phone number / carrier.
 
 ### Heartbeat
 
@@ -510,10 +543,14 @@ Public endpoint for receiving delivery receipts and incoming SMS.
 | Event | Description |
 |---|---|
 | sms:delivered | Message delivered to recipient |
-| sms:failed | Message delivery failed |
-| sms:sent | Message accepted by carrier |
+| sms:failed | Message delivery failed (captures `reason`) |
+| sms:sent | Message accepted by carrier (captures `partsCount`) |
 | sms:cancelled | Message was cancelled |
 | sms:received | Incoming SMS received |
+| sms:data-received | Incoming data SMS received |
+| mms:received | MMS notification received |
+| mms:downloaded | MMS downloaded (with attachments) |
+| app:started | App booted — refreshes device heartbeat/SIM info |
 | system:ping | Device heartbeat |
 
 **Response:**

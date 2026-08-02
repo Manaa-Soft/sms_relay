@@ -131,12 +131,13 @@ sms_relay/sms_relay/
 
 1. Android phone sends delivery status to webhook URL
 2. `webhook_receiver.incoming_webhook()` receives POST
-3. HMAC signature verified if configured (header: `X-Webhook-Signature`)
+3. HMAC signature verified if configured — accepts either `X-Webhook-Signature` (legacy, HMAC over raw body) or `X-Signature` + `X-Timestamp` (app scheme, HMAC over body + timestamp with 15-min freshness window)
 4. Idempotency check via cache
 5. SMS Queue and SMS Log status updated
 6. If `sms:cancelled`: both Queue and Log marked as Cancelled
-7. If incoming SMS: Communication doc created, auto-linked to Contact/Lead
-8. If webhook delivery fails: `SMS Webhook Delivery` entry created for retry
+7. If incoming SMS (`sms:received`/`sms:data-received`/`mms:received`/`mms:downloaded`): Communication doc created, auto-linked to Contact/Lead
+8. If `app:started`: matching SMS Device heartbeat and SIM info refreshed
+9. If webhook delivery fails: `SMS Webhook Delivery` entry created for retry
 
 ## Core Modules
 
