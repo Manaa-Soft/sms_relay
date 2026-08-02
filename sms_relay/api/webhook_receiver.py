@@ -74,6 +74,9 @@ def _handle_delivery_report(data, event_type):
     }
     new_status = status_map.get(event_type, "Sent")
 
+    if _idempotency_check(data, "delivery_report"):
+        return
+
     if message_id:
         frappe.db.set_value("SMS Queue", {"name": message_id}, "status", new_status)
         log_name = frappe.db.get_value("SMS Log", {"gateway_message_id": message_id}, "name")
@@ -92,8 +95,6 @@ def _handle_delivery_report(data, event_type):
                     fields["sms_parts"] = cint(parts)
             frappe.db.set_value("SMS Log", log_name, fields)
         frappe.db.commit()
-
-    _idempotency_check(data, "delivery_report")
 
 def _handle_cancelled_report(data):
     message_id = data.get("id") or data.get("messageId") or data.get("message_id")
@@ -116,15 +117,21 @@ def _handle_app_started(data):
     for device_name in devices:
         updates = {"is_online": 1, "last_heartbeat": now()}
         sim_number = cint(frappe.db.get_value("SMS Device", device_name, "sim_number") or 0)
+        selected = None
         for sim in sim_cards:
             if not isinstance(sim, dict):
                 continue
-            if sim_number and cint(sim.get("simNumber") or sim.get("sim_number") or 0) != sim_number:
+            if not sim_number:
+                selected = selected or sim
                 continue
-            if sim.get("phoneNumber"):
-                updates["sim_phone_number"] = sim["phoneNumber"]
-            if sim.get("carrierName"):
-                updates["carrier_name"] = sim["carrierName"]
+            if cint(sim.get("simNumber") or sim.get("sim_number") or 0) == sim_number:
+                selected = sim
+                break
+        if selected:
+            if selected.get("phoneNumber"):
+                updates["sim_phone_number"] = selected["phoneNumber"]
+            if selected.get("carrierName"):
+                updates["carrier_name"] = selected["carrierName"]
         frappe.db.set_value("SMS Device", device_name, updates)
     frappe.db.commit()
 
@@ -210,8 +217,10 @@ def _handle_incoming_sms(data, event_type="sms:received"):
     frappe.db.commit()
 
 def _idempotency_check(data, prefix):
+    # TTL matches verify_gateway_signature's default max_age (900s) so a
+    # replayed webhook can't pass signature checks after the cache expires.
     cache_key = "webhook_{}_{}".format(prefix, hash(json.dumps(data, sort_keys=True)))
     if frappe.cache().get_value(cache_key):
         return True
-    frappe.cache().set_value(cache_key, True, expires_in_sec=300)
+    frappe.cache().set_value(cache_key, True, expires_in_sec=900)
     return False

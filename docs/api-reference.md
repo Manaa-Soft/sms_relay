@@ -480,7 +480,7 @@ Public endpoint for receiving delivery receipts and incoming SMS.
 If `Webhook HMAC Secret` is configured, the endpoint accepts **either** scheme:
 
 1. **Android SMS Gateway app** (recommended) — headers `X-Signature` + `X-Timestamp`:
-   `X-Signature = HMAC-SHA256(secret, raw_body + X-Timestamp)` where `X-Timestamp` is unix seconds. Freshness window: `now - 60s ≤ ts ≤ now + 900s`.
+   `X-Signature = HMAC-SHA256(secret, raw_body + X-Timestamp)` where `X-Timestamp` is unix seconds. Freshness window: `now - 900s ≤ ts ≤ now + 60s`.
 2. **Legacy** — header `X-Webhook-Signature`:
    `X-Webhook-Signature = HMAC-SHA256(secret, raw_body)`.
 

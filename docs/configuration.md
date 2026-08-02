@@ -237,7 +237,7 @@ If `Webhook HMAC Secret` is configured, incoming webhooks are verified with **ei
 1. **Android SMS Gateway app** (recommended) — the app sends:
    - `X-Signature` = `HMAC-SHA256(secret, raw_body + X-Timestamp)` (hex)
    - `X-Timestamp` = unix seconds
-   Freshness window: `now - 60s ≤ ts ≤ now + 900s`.
+   Freshness window: `now - 900s ≤ ts ≤ now + 60s`.
 2. **Legacy** — `X-Webhook-Signature` = `HMAC-SHA256(secret, raw_body)` (hex)
 
 Set the same secret in the app's webhook configuration and in **SMS Relay Settings → Webhook HMAC Secret**.
