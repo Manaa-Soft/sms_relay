@@ -104,6 +104,12 @@ bench build --app sms_relay
 bench restart
 ```
 
+> **Frappe v16+ desk mode:** on an upgraded site the desk may be set to **Desktop Icons**, which
+> hides the SMS Relay icon because sms_relay ships no `desktop_icons/` fixture. Set **Desk →
+> Settings → Desktop Settings → Desktop Page = Apps** (recommended), or simply run `bench
+> migrate` — sms_relay's `after_migrate` hook seeds the icon. See
+> `docs/installation.md` → Troubleshooting for details.
+
 ## Quick Start
 
 ### 1. Configure SMS Gateway Settings

@@ -210,3 +210,26 @@ frappe.call({
 - [ ] (Optional) SMS Templates created
 - [ ] (Optional) SMS Notifications configured
 - [ ] (Optional) SMS Opt Out list populated
+
+## Troubleshooting: App missing from the desk after a Frappe upgrade
+
+On Frappe **v16+** the desk home has two modes controlled by **Desk → Settings → Desktop Settings → Desktop Page**:
+
+- **Apps** (default on fresh installs, hook-driven): SMS Relay appears automatically because the app declares the `add_to_apps_screen` hook.
+- **Desktop Icons** (older/upgraded sites are switched here by the Frappe v16 patch `keep_existing_sites_on_desktop_icons`): icons are drawn from the `Desktop Icon` doctype, which is only seeded while an app is *installed* in that mode. Because sms_relay ships no `desktop_icons/` fixture, an upgraded site in this mode loses the app icon.
+
+Fixes (pick the recommended first):
+
+1. **Recommended — switch to Apps mode.** Set `Desktop Page = Apps` in Desk → Settings → Desktop Settings, or run:
+   ```bash
+   bench --site your-site execute frappe.client.set_value --kwargs '{"doctype":"Desktop Settings","name":"Desktop Settings","fieldname":"desktop_page","value":"Apps"}'
+   bench --site your-site clear-cache
+   ```
+   Reload `/desk`. SMS Relay appears from its `add_to_apps_screen` hook.
+2. **Keep Desktop Icons mode — seed the icon.** sms_relay now does this automatically on every `bench migrate` (see the `after_migrate` hook in `sms_relay/setup.py`). If the icon is still missing, force it:
+   ```bash
+   bench --site your-site execute frappe.utils.install.create_desktop_icons_for_app --kwargs '{"app_name":"sms_relay"}'
+   bench --site your-site clear-cache
+   ```
+
+To confirm the current mode: `bench --site your-site execute frappe.client.get_value --kwargs '{"doctype":"Desktop Settings","fieldname":"desktop_page"}'`.

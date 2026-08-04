@@ -72,4 +72,5 @@ scheduler_events = {
 }
 
 after_install = "sms_relay.setup.after_install"
+after_migrate = "sms_relay.setup.after_migrate"
 before_tests = "sms_relay.setup.before_tests"

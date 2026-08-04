@@ -40,5 +40,33 @@ def _create_default_templates():
             doc.insert(ignore_permissions=True)
     frappe.db.commit()
 
+def after_migrate():
+    """Run after every `bench migrate` — keeps the app visible on the desk.
+
+    Frappe v16+ has two desk home modes (`Desktop Settings -> Desktop Page`):
+
+    - **Apps** (default on fresh installs, hook-driven): sms_relay appears because it
+      declares the `add_to_apps_screen` hook, so nothing is needed here.
+    - **Desktop Icons** (older/upgraded sites are switched here by the frappe v16 patch
+      `keep_existing_sites_on_desktop_icons`): the grid is drawn from the `Desktop Icon`
+      doctype, and icons are only seeded while an app is *installed* in that mode. sms_relay
+      ships no `desktop_icons/` fixture, so on upgraded sites it dropped off the desk.
+
+    Seeding the icon here (idempotent, a no-op in Apps mode) keeps the app visible whichever
+    mode the site uses. Falls back silently on Frappe versions without the seeding API.
+    """
+    _ensure_sms_relay_desktop_icon()
+
+
+def _ensure_sms_relay_desktop_icon():
+    try:
+        from frappe.utils.install import create_desktop_icons_for_app
+    except ImportError:
+        return
+    try:
+        create_desktop_icons_for_app("sms_relay")
+    except Exception as e:
+        frappe.log_error(f"Failed to seed SMS Relay desktop icon: {e}", "sms_relay.setup.after_migrate")
+
 def before_tests():
     pass
