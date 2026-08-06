@@ -12,34 +12,33 @@
   "condition"
  ],
  "fields": [
-  {
-   "description": "Phone field on the document (or child table) to receive the SMS",
-   "fieldname": "receiver_by_document_field",
-   "fieldtype": "Select",
-   "in_list_view": 1,
-   "label": "Receiver By Document Field"
-  },
-  {
-   "description": "Send to all enabled Users with this role (their mobile_no)",
-   "fieldname": "receiver_by_role",
-   "fieldtype": "Link",
-   "in_list_view": 1,
-   "label": "Receiver By Role",
-   "options": "Role"
-  },
-  {
-   "description": "Always send to this phone number (full international format)",
-   "fieldname": "recipient_phone",
-   "fieldtype": "Data",
-   "in_list_view": 1,
-   "label": "Recipient Phone"
-  },
-  {
-   "description": "Expression, Optional: only this row is sent when True. Example: (doc.grand_total or 0) > 1000",
-   "fieldname": "condition",
-   "fieldtype": "Data",
-   "label": "Condition"
-  }
+   {
+    "fieldname": "receiver_by_document_field",
+    "fieldtype": "Select",
+    "in_list_view": 1,
+    "label": "Receiver By Document Field"
+   },
+   {
+    "fieldname": "receiver_by_role",
+    "fieldtype": "Link",
+    "in_list_view": 1,
+    "label": "Receiver By Role",
+    "options": "Role"
+   },
+   {
+    "description": "Always send to this phone number (full international format)",
+    "fieldname": "recipient_phone",
+    "fieldtype": "Data",
+    "in_list_view": 1,
+    "label": "Recipient Phone"
+   },
+   {
+    "description": "Expression, Optional",
+    "fieldname": "condition",
+    "fieldtype": "Data",
+    "in_list_view": 1,
+    "label": "Condition"
+   }
  ],
  "permissions": [],
  "sort_field": "creation",
