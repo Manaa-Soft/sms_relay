@@ -50,6 +50,24 @@ class TestProcessSmsQueue(SMSRelayTestCase):
         queue.reload()
         self.assertIn(queue.status, ["Queued", "Failed"])
 
+    @patch("sms_relay.core.sms_engine._send_to_device")
+    def test_failed_send_sets_backoff(self, mock_send):
+        mock_send.return_value = {"success": False, "error": "HTTP 401: Unauthorized"}
+        queue = frappe.new_doc("SMS Queue")
+        queue.recipient = "+15551234567"
+        queue.message = "Backoff test"
+        queue.status = "Queued"
+        queue.device = "Test Phone"
+        queue.max_retries = 3
+        queue.insert(ignore_permissions=True)
+        frappe.db.commit()
+
+        _process_queue_item(queue.name)
+        queue.reload()
+        self.assertEqual(queue.status, "Queued")
+        self.assertEqual(queue.retry_count, 1)
+        self.assertIsNotNone(queue.next_retry_at)
+
 
 class TestProcessScheduledMessages(SMSRelayTestCase):
     """Test scheduled message processing."""

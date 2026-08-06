@@ -59,7 +59,6 @@ def _process_queue_item(queue_name):
         _log_sms(queue.recipient, queue.message, "Failed", error="Message expired (valid_until)", message_id=queue.message_id)
         return
     if queue.ttl_seconds and queue.creation:
-        from frappe.utils import add_to_date
         expires_at = add_to_date(queue.creation, seconds=cint(queue.ttl_seconds))
         if now > expires_at:
             queue.status = "Failed"
@@ -103,7 +102,7 @@ def _process_queue_item(queue_name):
             queue.status = "Failed"
         else:
             queue.status = "Queued"
-            queue.next_retry_at = add_to_date(now(), minutes=2 ** retry_count)
+            queue.next_retry_at = add_to_date(now, minutes=2 ** retry_count)
         queue.save(ignore_permissions=True)
 
 def process_outbox():
