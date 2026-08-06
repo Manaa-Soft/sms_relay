@@ -175,7 +175,7 @@ Configure automatic SMS triggers on ERPNext documents.
 | Disabled | Check | No | Disable this rule. |
 | Reference DocType | Link: DocType | Yes | Target DocType (Sales Invoice, etc.). |
 | DocType Event | Select | Yes | On Submit / On Save / On Validate / etc. |
-| Field Name | Data | Yes | Field containing phone number. |
+| Field Name | Data | Yes | Field containing phone number. Use `contact_mobile` on Sales Invoice / Sales Order / Delivery Note (auto-filled from the customer's primary Contact). |
 | Template | Link: SMS Template | Yes | Linked SMS Template. |
 | Template Type | Select | Yes | **Jinja** (`{{ doc.field }}` syntax) or **Parameter** (`{{1}}`, `{{2}}` mapped via Fields table). |
 | Message Template | Code (HTML) | Yes | Template body (auto-loaded from linked template). |
@@ -183,6 +183,10 @@ Configure automatic SMS triggers on ERPNext documents.
 | Event Frequency | Select | No | How often to trigger (for scheduled notifications). |
 | Scheduler Data Source | Select | No | `Overdue Invoices`: send one message per overdue Sales Invoice (submitted, outstanding balance past due date). Template is chosen per recipient from the invoice/Customer language (Arabic → "…(Arabic)" variant). |
 | Fields | Table: SMS Message Field | No | Maps `{{1}}`, `{{2}}` placeholders to document fields (Parameter mode only). |
+
+> **Language:** for DocType Event notifications the message is auto-localized — if the document (or its linked Customer) has an Arabic `language`, an existing `"… (Arabic)"` template variant is used automatically.
+
+
 
 ### Template Types
 

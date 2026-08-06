@@ -180,6 +180,22 @@ Messages are also imported in real time via `sms:received` webhooks; the inbox s
 
 All default templates (Payment Reminder, Order Confirmation, Dispatch Notification, Payment Link, Overdue Invoice Reminder) also ship an **"(Arabic)"** variant, auto-selected for Arabic-language recipients.
 
+## Seeded Notifications (created on install / migrate)
+
+| Notification | Type | Trigger | Template | Phone field | Default |
+|---|---|---|---|---|---|
+| Send Overdue Invoice Reminders | Scheduler Event (Daily) | `Overdue Invoices` | Overdue Invoice Reminder | via Customer | **Enabled** |
+| Send Payment Reminder | Scheduler Event (Daily) | `Overdue Invoices` | Payment Reminder | via Customer | Disabled |
+| Send Order Confirmation | DocType Event | Sales Order → After Submit | Order Confirmation | `contact_mobile` | Disabled |
+| Send Dispatch Notification | DocType Event | Delivery Note → After Submit | Dispatch Notification | `contact_mobile` | Disabled |
+| Send Payment Link | DocType Event | Sales Invoice → After Submit | Payment Link | `contact_mobile` | Disabled |
+
+> **Phone Number Field:** Sales Order, Delivery Note and Sales Invoice all expose ERPNext's standard `contact_mobile` field (auto-filled from the customer's primary Contact). A notification sends only when that field is populated on the document.
+>
+> **Language:** for DocType Event notifications the message is auto-localized — if the document (or its Customer) has an Arabic `language`, the `"(Arabic)"` template variant is used when it exists.
+>
+> **Duplicates:** "Send Overdue Invoice Reminders" and "Send Payment Reminder" run the same daily scan with different wording — enable only one to avoid duplicate SMS.
+
 ---
 
 ## retry_failed_sms

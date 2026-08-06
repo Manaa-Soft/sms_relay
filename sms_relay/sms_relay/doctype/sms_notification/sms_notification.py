@@ -45,6 +45,7 @@ class SMSNotification(Document):
             return
 
         doc_data = doc.as_dict()
+        effective_template = self._resolve_language_template(template or self.template, doc)
 
         if self.condition and not ignore_condition:
             if not frappe.safe_eval(
@@ -66,11 +67,11 @@ class SMSNotification(Document):
         if is_opted_out(cleaned):
             return
 
-        message = self._render_message(doc, template)
+        message = self._render_message(doc, effective_template)
         if not message:
             return
 
-        self._send_sms(cleaned, message, doc_data, template)
+        self._send_sms(cleaned, message, doc_data, effective_template)
 
         if doc_data and self.set_property_after_alert:
             prop_name = self.set_property_after_alert
@@ -174,6 +175,27 @@ class SMSNotification(Document):
             if str(code).lower().startswith("ar"):
                 return "{} (Arabic)".format(self.template)
         return self.template
+
+    def _resolve_language_template(self, template_name, doc):
+        """Auto-select an "(Arabic)" template variant for Arabic recipients.
+
+        The recipient language is read from the document's ``language`` field
+        (or the linked Customer), mirroring the scheduler's Overdue Invoices
+        selection so DocType Event notifications are localized the same way.
+        Falls back to the configured template when the variant does not exist.
+        """
+        if not template_name or not doc:
+            return template_name
+        lang = doc.get("language")
+        if not lang and doc.get("customer"):
+            lang = frappe.db.get_value("Customer", doc.get("customer"), "language")
+        if lang:
+            code = frappe.db.get_value("Language", lang, "language_code") or ""
+            if str(code).lower().startswith("ar"):
+                candidate = "{} (Arabic)".format(template_name)
+                if frappe.db.exists("SMS Template", candidate):
+                    return candidate
+        return template_name
 
     # ─── Shared helpers ──────────────────────────────────────────────
 
