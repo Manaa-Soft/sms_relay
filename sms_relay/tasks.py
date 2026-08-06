@@ -199,33 +199,6 @@ def _check_single_device(device):
             frappe.db.set_value("SMS Device", device.name, "is_active", 0)
         frappe.db.commit()
 
-def send_overdue_reminders():
-    invoices = frappe.get_all(
-        "Sales Invoice",
-        filters={
-            "docstatus": 1,
-            "outstanding_amount": [">", 0],
-            "due_date": ["<", getdate()],
-        },
-        fields=["name", "customer", "due_date", "outstanding_amount"],
-        limit=50,
-    )
-    if not invoices:
-        return
-    for inv in invoices:
-        try:
-            from sms_relay.core.sms_engine import _get_customer_phone, _enqueue_sms
-            phone = _get_customer_phone(inv.customer)
-            if not phone:
-                continue
-            msg = "Dear {} - Reminder: Invoice {} is overdue (due {}). Outstanding: {}. Please pay soon.".format(
-                inv.customer, inv.name, frappe.utils.formatdate(inv.due_date),
-                frappe.utils.fmt_money(inv.outstanding_amount),
-            )
-            _enqueue_sms(phone=phone, message=msg, priority="Normal")
-        except Exception:
-            frappe.log_error(title="Overdue SMS: {}".format(inv.name))
-
 def retry_failed_sms():
     failed = frappe.get_all(
         "SMS Queue",

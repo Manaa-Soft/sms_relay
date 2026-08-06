@@ -754,7 +754,6 @@ Overrides `frappe.core.doctype.sms_settings.sms_settings.send_sms`. All outgoing
 | Hourly | check_device_health | sms_relay.tasks.check_device_health |
 | Hourly | sync_delivery_status | sms_relay.tasks.sync_delivery_status |
 | Hourly | sync_device_inbox | sms_relay.tasks.sync_device_inbox |
-| Daily | send_overdue_reminders | sms_relay.tasks.send_overdue_reminders |
 | Daily | retry_failed_sms | sms_relay.tasks.retry_failed_sms |
 | Daily | cleanup_old_logs | sms_relay.tasks.cleanup_old_logs |
 | Daily | reset_daily_quotas | sms_relay.tasks.reset_daily_quotas |

@@ -117,15 +117,23 @@
    "label": "Scheduler Event",
    "depends_on": "eval:doc.notification_type == 'Scheduler Event'"
   },
-  {
-   "fieldname": "event_frequency",
-   "fieldtype": "Select",
-   "label": "Event Frequency",
-   "options": "All\nHourly\nDaily\nWeekly\nMonthly\nYearly",
-   "reqd": 0,
-   "depends_on": "eval:doc.notification_type == 'Scheduler Event'",
-   "mandatory_depends_on": "eval:doc.notification_type == 'Scheduler Event'"
-  },
+   {
+    "fieldname": "event_frequency",
+    "fieldtype": "Select",
+    "label": "Event Frequency",
+    "options": "All\nHourly\nDaily\nWeekly\nMonthly\nYearly",
+    "reqd": 0,
+    "depends_on": "eval:doc.notification_type == 'Scheduler Event'",
+    "mandatory_depends_on": "eval:doc.notification_type == 'Scheduler Event'"
+   },
+   {
+    "fieldname": "scheduler_data_source",
+    "fieldtype": "Select",
+    "label": "Scheduler Data Source",
+    "options": "\nOverdue Invoices",
+    "description": "Overdue Invoices: query submitted Sales Invoices with an outstanding balance past their due date and send one message per invoice.",
+    "depends_on": "eval:doc.notification_type == 'Scheduler Event'"
+   },
   {
    "fieldname": "section_break_condition",
    "fieldtype": "Section Break",
@@ -188,7 +196,7 @@
    "fieldname": "help_html",
    "fieldtype": "HTML",
    "label": "Help",
-   "options": "<h4>SMS Notification</h4>\n<p>Triggered automatically when a document event occurs or on a schedule.</p>\n<h5>DocType Event</h5>\n<p>Set <b>Phone Number Field</b> to the fieldname containing the phone number (e.g. <code>mobile_no</code>).</p>\n<p><b>Condition</b> is evaluated as a Python expression. Use <code>doc</code> to access the document.</p>\n<h5>Scheduler Event</h5>\n<p>In the Condition field, set <code>doc.set('_contact_list', ['919123456789'])</code> or <code>doc.set('_data_list', [{'name': 'INV-001', 'phone_no': '919123456789'}])</code></p>\n<h5>Template</h5>\n<p>Link to an SMS Template for pre-approved messages, or write a Jinja template in the Message Template field.</p>"
+   "options": "<h4>SMS Notification</h4>\n<p>Triggered automatically when a document event occurs or on a schedule.</p>\n<h5>DocType Event</h5>\n<p>Set <b>Phone Number Field</b> to the fieldname containing the phone number (e.g. <code>mobile_no</code>).</p>\n<p><b>Condition</b> is evaluated as a Python expression. Use <code>doc</code> to access the document.</p>\n<h5>Scheduler Event</h5>\n<p>Set <b>Scheduler Data Source</b> to <code>Overdue Invoices</code> to send one message per overdue Sales Invoice (submitted, outstanding balance past due date). The template is chosen per recipient from the invoice or Customer language.</p>\n<p>Alternatively, in the Condition field set <code>doc.set('_contact_list', ['919123456789'])</code> or <code>doc.set('_data_list', [{'name': 'INV-001', 'phone_no': '919123456789'}])</code></p>\n<h5>Template</h5>\n<p>Link to an SMS Template for pre-approved messages, or write a Jinja template in the Message Template field.</p>"
   }
  ],
  "permissions": [

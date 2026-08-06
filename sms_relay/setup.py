@@ -3,6 +3,7 @@ import frappe
 def after_install():
     _create_default_gateway_settings()
     _create_default_templates()
+    _create_default_notifications()
 
 def _create_default_gateway_settings():
     if not frappe.db.exists("SMS Gateway Settings", "SMS Gateway Settings"):
@@ -13,35 +14,97 @@ def _create_default_gateway_settings():
         settings.insert(ignore_permissions=True)
         frappe.db.commit()
 
+def _get_language_doc(lang_code, fallback):
+    """Resolve a Language doc name by language_code with a fallback name."""
+    name = frappe.db.get_value("Language", {"language_code": lang_code}, "name")
+    return name or fallback
+
 def _create_default_templates():
+    try:
+        _seed_default_templates()
+    except Exception as e:
+        frappe.log_error(f"Failed to seed SMS Templates: {e}", "sms_relay.setup")
+
+def _seed_default_templates():
+    en = _get_language_doc("en", "English")
+    ar = _get_language_doc("ar", "العربية")
     templates = [
         {
             "template_name": "Payment Reminder",
+            "category": "UTILITY",
+            "language": en,
             "message_template": "Dear {{ doc.customer }}, your invoice {{ doc.name }} for {{ frappe.utils.fmt_money(doc.outstanding_amount) }} is overdue. Please pay at your earliest convenience.",
         },
         {
             "template_name": "Order Confirmation",
+            "category": "TRANSACTIONAL",
+            "language": en,
             "message_template": "Thank you for your order {{ doc.name }}. Total: {{ frappe.utils.fmt_money(doc.grand_total) }}. We will process your order shortly.",
         },
         {
             "template_name": "Dispatch Notification",
+            "category": "TRANSACTIONAL",
+            "language": en,
             "message_template": "Your order {{ doc.name }} has been dispatched. Expected delivery: {{ doc.delivery_date }}. Tracking will be shared shortly.",
         },
         {
             "template_name": "Payment Link",
+            "category": "TRANSACTIONAL",
+            "language": en,
             "message_template": "Dear {{ doc.customer }}, pay your invoice {{ doc.name }} ({{ frappe.utils.fmt_money(doc.grand_total) }}) using this link: {{ doc.payment_url }}",
+        },
+        {
+            "template_name": "Overdue Invoice Reminder",
+            "category": "UTILITY",
+            "language": en,
+            "message_template": "Dear {{ doc.customer }} - Reminder: Invoice {{ doc.name }} is overdue (due {{ frappe.utils.formatdate(doc.due_date) }}). Outstanding: {{ frappe.utils.fmt_money(doc.outstanding_amount) }}. Please pay soon.",
+        },
+        {
+            "template_name": "Overdue Invoice Reminder (Arabic)",
+            "category": "UTILITY",
+            "language": ar,
+            "message_template": "عزيزي {{ doc.customer }}، تذكير: الفاتورة {{ doc.name }} متأخرة السداد (تاريخ الاستحقاق {{ frappe.utils.formatdate(doc.due_date) }}). المبلغ المستحق: {{ frappe.utils.fmt_money(doc.outstanding_amount) }}. يرجى الدفع في أقرب وقت.",
         },
     ]
     for t in templates:
         if not frappe.db.exists("SMS Template", t["template_name"]):
             doc = frappe.new_doc("SMS Template")
-            doc.template_name = t["template_name"]
-            doc.message_template = t["message_template"]
+            doc.update(t)
+            doc.insert(ignore_permissions=True)
+    frappe.db.commit()
+
+def _create_default_notifications():
+    try:
+        _seed_default_notifications()
+    except Exception as e:
+        frappe.log_error(f"Failed to seed SMS Notifications: {e}", "sms_relay.setup")
+
+def _seed_default_notifications():
+    notifications = [
+        {
+            "notification_name": "Send Overdue Invoice Reminders",
+            "notification_type": "Scheduler Event",
+            "reference_doctype": "Sales Invoice",
+            "event_frequency": "Daily",
+            "scheduler_data_source": "Overdue Invoices",
+            "template": "Overdue Invoice Reminder",
+            "template_type": "Jinja",
+            "disabled": 0,
+        },
+    ]
+    for n in notifications:
+        if not frappe.db.exists("SMS Notification", n["notification_name"]):
+            doc = frappe.new_doc("SMS Notification")
+            doc.update(n)
             doc.insert(ignore_permissions=True)
     frappe.db.commit()
 
 def after_migrate():
-    """Run after every `bench migrate` — keeps the app visible on the desk.
+    """Run after every `bench migrate` — keeps the app visible on the desk and
+    (re)seeds default SMS Templates and Notifications for existing installs.
+
+    Seeding is idempotent: records already present (or edited/disabled by the
+    user) are left untouched.
 
     Frappe v16+ has two desk home modes (`Desktop Settings -> Desktop Page`):
 
@@ -55,6 +118,8 @@ def after_migrate():
     Seeding the icon here (idempotent, a no-op in Apps mode) keeps the app visible whichever
     mode the site uses. Falls back silently on Frappe versions without the seeding API.
     """
+    _create_default_templates()
+    _create_default_notifications()
     _ensure_sms_relay_desktop_icon()
 
 

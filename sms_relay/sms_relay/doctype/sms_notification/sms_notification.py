@@ -39,7 +39,7 @@ class SMSNotification(Document):
 
     # ─── DocType Event path ──────────────────────────────────────────
 
-    def send_template_message(self, doc, phone_no=None, default_template=None, ignore_condition=False):
+    def send_template_message(self, doc, phone_no=None, default_template=None, ignore_condition=False, template=None):
         """Specific to Document Event triggered Server Scripts."""
         if self.disabled:
             return
@@ -66,11 +66,11 @@ class SMSNotification(Document):
         if is_opted_out(cleaned):
             return
 
-        message = self._render_message(doc)
+        message = self._render_message(doc, template)
         if not message:
             return
 
-        self._send_sms(cleaned, message, doc_data)
+        self._send_sms(cleaned, message, doc_data, template)
 
         if doc_data and self.set_property_after_alert:
             prop_name = self.set_property_after_alert
@@ -109,6 +109,9 @@ class SMSNotification(Document):
                 self.condition, get_safe_globals(), dict(doc=self)
             )
 
+        if self.get("scheduler_data_source") == "Overdue Invoices":
+            self._build_overdue_invoice_data()
+
         if self.get("_contact_list"):
             for contact in self._contact_list:
                 cleaned = clean_phone(str(contact))
@@ -121,19 +124,69 @@ class SMSNotification(Document):
             for data in self._data_list:
                 doc = frappe.get_doc(self.reference_doctype, data.get("name"))
                 phone_no = data.get("phone_no")
-                self.send_template_message(doc, phone_no, ignore_condition=True)
+                self.send_template_message(
+                    doc, phone_no, ignore_condition=True, template=data.get("template")
+                )
+
+    def _build_overdue_invoice_data(self):
+        """Build ``_data_list`` from overdue Sales Invoices.
+
+        Each item resolves the recipient phone (via the Customer) and the
+        template to use (by invoice/Customer language).  Mirrors the legacy
+        ``send_overdue_reminders`` query (submitted, outstanding balance past
+        due date, limit 50).
+        """
+        from sms_relay.core.sms_engine import _get_customer_phone
+        invoices = frappe.get_all(
+            "Sales Invoice",
+            filters={
+                "docstatus": 1,
+                "outstanding_amount": [">", 0],
+                "due_date": ["<", frappe.utils.getdate()],
+            },
+            fields=["name", "customer"],
+            limit=50,
+        )
+        data = []
+        for inv in invoices:
+            phone = _get_customer_phone(inv.customer)
+            if not phone:
+                continue
+            data.append({
+                "name": inv.name,
+                "phone_no": phone,
+                "template": self._template_for_invoice(inv.name, inv.customer),
+            })
+        self.set("_data_list", data)
+
+    def _template_for_invoice(self, invoice_name, customer):
+        """Pick the SMS Template per recipient based on language.
+
+        Arabic recipients get the "(Arabic)" variant; everyone else falls back
+        to the notification's configured template.
+        """
+        lang = (
+            frappe.db.get_value("Sales Invoice", invoice_name, "language")
+            or frappe.db.get_value("Customer", customer, "language")
+        )
+        if lang:
+            code = frappe.db.get_value("Language", lang, "language_code") or ""
+            if str(code).lower().startswith("ar"):
+                return "{} (Arabic)".format(self.template)
+        return self.template
 
     # ─── Shared helpers ──────────────────────────────────────────────
 
-    def _render_message(self, doc):
+    def _render_message(self, doc, template=None):
         """Render message based on template_type.
 
         Jinja:     {{ doc.field_name }} rendered via Jinja2
         Parameter: {{1}}, {{2}} replaced from the ``fields`` child table (no Jinja)
         """
-        if self.template:
+        template_name = template or self.template
+        if template_name:
             try:
-                template_doc = frappe.get_doc("SMS Template", self.template)
+                template_doc = frappe.get_doc("SMS Template", template_name)
                 body = template_doc.message_template or ""
                 if not body:
                     return ""
@@ -184,7 +237,7 @@ class SMSNotification(Document):
             return params[idx] if 0 <= idx < len(params) else match.group(0)
         return re.sub(r"\{\{(\d+)\}\}", _replace, text)
 
-    def _send_sms(self, phone, message, doc_data=None):
+    def _send_sms(self, phone, message, doc_data=None, template=None):
         """Enqueue SMS for sending."""
         from sms_relay.core.sms_engine import _enqueue_sms
         priority = "High" if any(w in message.lower() for w in ("payment", "otp")) else "Normal"
@@ -192,8 +245,9 @@ class SMSNotification(Document):
         if doc_data and doc_data.get("doctype") and doc_data.get("name"):
             extras["reference_doctype"] = doc_data.get("doctype")
             extras["reference_name"] = doc_data.get("name")
-        if self.template:
-            extras["template"] = self.template
+        template = template or self.template
+        if template:
+            extras["template"] = template
         queue = _enqueue_sms(
             phone=phone,
             message=message,

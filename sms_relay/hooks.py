@@ -56,7 +56,6 @@ scheduler_events = {
         "sms_relay.utils.trigger_sms_notifications_hourly",
     ],
     "daily": [
-        "sms_relay.tasks.send_overdue_reminders",
         "sms_relay.tasks.retry_failed_sms",
         "sms_relay.tasks.cleanup_old_logs",
         "sms_relay.tasks.reset_daily_quotas",

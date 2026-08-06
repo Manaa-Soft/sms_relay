@@ -181,6 +181,7 @@ Configure automatic SMS triggers on ERPNext documents.
 | Message Template | Code (HTML) | Yes | Template body (auto-loaded from linked template). |
 | Condition | Code (Python) | No | `return True` to send. |
 | Event Frequency | Select | No | How often to trigger (for scheduled notifications). |
+| Scheduler Data Source | Select | No | `Overdue Invoices`: send one message per overdue Sales Invoice (submitted, outstanding balance past due date). Template is chosen per recipient from the invoice/Customer language (Arabic → "…(Arabic)" variant). |
 | Fields | Table: SMS Message Field | No | Maps `{{1}}`, `{{2}}` placeholders to document fields (Parameter mode only). |
 
 ### Template Types

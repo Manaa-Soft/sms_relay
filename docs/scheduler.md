@@ -159,19 +159,24 @@ Messages are also imported in real time via `sms:received` webhooks; the inbox s
 
 ---
 
-## send_overdue_reminders
+## Send Overdue Invoice Reminders (seeded SMS Notification)
 
-**Frequency:** Daily
+**Frequency:** Daily (via `trigger_sms_notifications_daily`)
 
-**Purpose:** Sends overdue invoice payment reminder SMS.
+**Purpose:** Sends overdue invoice payment reminder SMS. No longer a hardcoded job — it ships as a **seeded SMS Notification** + **SMS Templates**, created automatically on install/migrate, so it can be stopped (tick **Disabled**) or edited from the desk.
 
 **What it does:**
-1. Fetches submitted Sales Invoices with outstanding > 0 and due_date < today
-2. For each invoice:
-   a. Gets customer phone from Contact chain
-   b. Checks opt-out list
-   c. Creates queue entry with message: "Dear {customer}, invoice {name} of {amount} is overdue (due {date}). Outstanding: {outstanding}. Please pay soon."
-3. Commits changes
+1. Runs the daily **Scheduler Event** notification **"Send Overdue Invoice Reminders"** (`scheduler_data_source = Overdue Invoices`)
+2. Fetches submitted Sales Invoices with outstanding > 0 and due_date < today (limit 50)
+3. For each invoice:
+   a. Gets customer phone from Contact chain (Customer `mobile_no`/`phone`, then linked Contact)
+   b. Picks the template by language: invoice or Customer `language` = Arabic → **"Overdue Invoice Reminder (Arabic)"**, otherwise → **"Overdue Invoice Reminder"**
+   c. Renders the Jinja template against the invoice and enqueues one SMS
+4. Disable the notification to stop the reminders; edit the templates to change the wording
+
+**Seeded records** (idempotent, created by `after_install` / `after_migrate`):
+- SMS Template **"Overdue Invoice Reminder"** (EN) and **"Overdue Invoice Reminder (Arabic)"**
+- SMS Notification **"Send Overdue Invoice Reminders"** (Scheduler Event, Daily, active by default)
 
 ---
 
@@ -232,7 +237,6 @@ scheduler_events = {
         "sms_relay.utils.trigger_sms_notifications_hourly",
     ],
     "daily": [
-        "sms_relay.tasks.send_overdue_reminders",
         "sms_relay.tasks.retry_failed_sms",
         "sms_relay.tasks.cleanup_old_logs",
         "sms_relay.tasks.reset_daily_quotas",

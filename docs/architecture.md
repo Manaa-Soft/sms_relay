@@ -179,7 +179,6 @@ sms_relay/sms_relay/
 | `process_bulk_messages()` | Process bulk campaigns in batches (every minute) |
 | `process_webhook_deliveries()` | Retry failed webhooks with exponential backoff (every minute) |
 | `check_device_health()` | Heartbeat, battery, signal checks (hourly) |
-| `send_overdue_reminders()` | Overdue invoice notifications (daily) |
 | `retry_failed_sms()` | Re-enqueue retryable failures (daily) |
 | `cleanup_old_logs()` | Purge old SMS Log entries (daily, 90-day retention) |
 | `reset_daily_quotas()` | Reset device daily counters (daily) |
@@ -204,7 +203,6 @@ sms_relay/sms_relay/
 | Every minute | `process_bulk_messages` | Process bulk campaign batches |
 | Every minute | `process_webhook_deliveries` | Retry failed webhooks with backoff |
 | Hourly | `check_device_health` | Heartbeat, battery, signal checks |
-| Daily | `send_overdue_reminders` | Overdue invoice notifications |
 | Daily | `retry_failed_sms` | Re-enqueue retryable failures |
 | Daily | `cleanup_old_logs` | Purge old SMS Log entries |
 | Daily | `reset_daily_quotas` | Reset device daily counters |

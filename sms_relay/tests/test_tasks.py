@@ -8,7 +8,6 @@ from sms_relay.tasks import (
     process_outbox,
     process_bulk_messages,
     process_webhook_deliveries,
-    send_overdue_reminders,
     _process_queue_item,
     _process_outbox_item,
     _process_webhook_delivery,
@@ -120,74 +119,6 @@ class TestTtlExpiry(SMSRelayTestCase):
         _process_queue_item(queue.name)
         queue.reload()
         self.assertEqual(queue.status, "Failed")
-
-
-class TestSendOverdueReminders(SMSRelayTestCase):
-    """Test overdue invoice reminders."""
-
-    @patch("sms_relay.core.sms_engine._enqueue_sms")
-    @patch("sms_relay.core.sms_engine._get_customer_phone")
-    def test_sends_well_formed_message(self, mock_phone, mock_enqueue):
-        mock_phone.return_value = "+967777715787"
-        mock_enqueue.return_value = None
-
-        invoices = [frappe._dict({
-            "name": "ACC-SINV-2026-00033",
-            "customer": "Faissal Mannaa",
-            "due_date": "2026-07-10",
-            "outstanding_amount": 10000.0,
-        })]
-        with patch("frappe.get_all", return_value=invoices):
-            send_overdue_reminders()
-
-        mock_phone.assert_called_once_with("Faissal Mannaa")
-        self.assertEqual(mock_enqueue.call_count, 1)
-        msg = mock_enqueue.call_args.kwargs["message"]
-        from frappe.utils import formatdate, fmt_money
-        self.assertIn("ACC-SINV-2026-00033", msg)
-        self.assertIn("Faissal Mannaa", msg)
-        self.assertIn(fmt_money(10000.0), msg)
-        self.assertIn(formatdate("2026-07-10"), msg)
-
-    @patch("sms_relay.core.sms_engine._enqueue_sms")
-    @patch("sms_relay.core.sms_engine._get_customer_phone")
-    def test_skips_customer_without_phone(self, mock_phone, mock_enqueue):
-        mock_phone.return_value = None
-
-        invoices = [frappe._dict({
-            "name": "ACC-SINV-2026-00033",
-            "customer": "Faissal Mannaa",
-            "due_date": "2026-07-10",
-            "outstanding_amount": 10000.0,
-        })]
-        with patch("frappe.get_all", return_value=invoices):
-            send_overdue_reminders()
-
-        mock_enqueue.assert_not_called()
-
-    @patch("sms_relay.core.sms_engine._enqueue_sms")
-    @patch("sms_relay.core.sms_engine._get_customer_phone")
-    def test_handles_multiple_overdue_invoices(self, mock_phone, mock_enqueue):
-        mock_phone.return_value = "+967777715787"
-
-        invoices = [
-            frappe._dict({
-                "name": "ACC-SINV-2026-00177",
-                "customer": "Faissal Mannaa",
-                "due_date": "2026-07-19",
-                "outstanding_amount": 50.0,
-            }),
-            frappe._dict({
-                "name": "ACC-SINV-2026-00033",
-                "customer": "Manaa Mannaa",
-                "due_date": "2026-07-10",
-                "outstanding_amount": 2000.0,
-            }),
-        ]
-        with patch("frappe.get_all", return_value=invoices):
-            send_overdue_reminders()
-
-        self.assertEqual(mock_enqueue.call_count, 2)
 
 
 class TestRetryFailedSms(SMSRelayTestCase):

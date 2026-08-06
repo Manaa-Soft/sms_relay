@@ -336,10 +336,10 @@ Supported events: `sms:delivered`, `sms:failed`, `sms:sent`, `sms:cancelled`, `s
 | Hourly | `check_device_health` | Heartbeat, battery, signal checks |
 | Hourly | `sync_delivery_status` | Delivery-status reconciliation via gateway API |
 | Hourly | `sync_device_inbox` | Backfill device inbox into SMS Queue |
-| Daily | `send_overdue_reminders` | Overdue invoice notifications |
 | Daily | `retry_failed_sms` | Re-enqueue retryable failures |
 | Daily | `cleanup_old_logs` | Purge old SMS Log entries (90-day retention) |
 | Daily | `reset_daily_quotas` | Reset device daily counters |
+| Daily | `trigger_sms_notifications_daily` | Daily notifications (e.g. seeded **Send Overdue Invoice Reminders**) |
 
 ## Module Structure
 

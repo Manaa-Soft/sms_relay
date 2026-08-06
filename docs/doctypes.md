@@ -301,6 +301,7 @@ Doc-triggered automated SMS rules with Jinja or Parameter templates.
 | message_template | Code (HTML) | Template body (auto-loaded from linked template) |
 | condition | Code (Python) | `return True` to send |
 | event_frequency | Select | How often to trigger |
+| scheduler_data_source | Select | `Overdue Invoices` — send one message per overdue Sales Invoice (submitted, outstanding balance past due date); template selected per invoice/Customer language |
 | days_in_advance | Int | For scheduled: days before date field |
 | date_changed | Select | Date/Datetime field to check (auto-populated from DocType) |
 | set_property_after_alert | Data | Field to update after sending |
