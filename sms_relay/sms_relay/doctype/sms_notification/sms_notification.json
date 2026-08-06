@@ -37,13 +37,13 @@
    "in_list_view": 1,
    "in_standard_filter": 1
   },
-  {
-   "fieldname": "field_name",
-   "fieldtype": "Data",
-   "label": "Phone Number Field",
-   "description": "Field name on the DocType that contains the phone number",
-   "mandatory_depends_on": "eval:['DocType Event'].includes(doc.notification_type)"
-  },
+   {
+    "fieldname": "field_name",
+    "fieldtype": "Data",
+    "label": "Phone Number Field",
+    "description": "Primary phone field on the DocType. Recipients rows below are sent in addition.",
+    "mandatory_depends_on": "eval:['DocType Event'].includes(doc.notification_type) && !doc.recipients.length"
+   },
   {
    "fieldname": "column_break_1",
    "fieldtype": "Column Break"
@@ -140,11 +140,33 @@
    "label": "Condition & Message"
   },
   {
+   "fieldname": "condition_type",
+   "fieldtype": "Select",
+   "label": "Condition Type",
+   "options": "Python\nFilters",
+   "default": "Python"
+  },
+  {
+   "depends_on": "eval:doc.condition_type===\"Python\"",
    "fieldname": "condition",
    "fieldtype": "Code",
    "label": "Condition (Python Expression)",
    "options": "Python",
-    "description": "Expression that must evaluate to True to send. doc is the triggering document. Example: (doc.grand_total or 0) > 1000"
+   "description": "Expression that must evaluate to True to send. doc is the triggering document. Example: (doc.grand_total or 0) > 1000"
+  },
+  {
+   "depends_on": "eval:doc.condition_type===\"Filters\"",
+   "fieldname": "filters_editor",
+   "fieldtype": "HTML",
+   "label": "Filters Editor"
+  },
+  {
+   "fieldname": "filters",
+   "fieldtype": "Code",
+   "hidden": 1,
+   "label": "Filters",
+   "options": "JSON",
+   "read_only": 1
   },
   {
    "fieldname": "column_break_condition",
@@ -156,6 +178,19 @@
    "label": "Message Template (Jinja)",
    "options": "HTML",
    "description": "Use {{ doc }}, {{ frappe.utils.nowdate() }}. Jinja2 syntax."
+  },
+  {
+   "fieldname": "section_break_recipients",
+   "fieldtype": "Section Break",
+   "label": "Recipients",
+   "depends_on": "eval:doc.notification_type == 'DocType Event'"
+  },
+  {
+   "fieldname": "recipients",
+   "fieldtype": "Table",
+   "label": "Recipients",
+   "options": "SMS Notification Recipient",
+   "description": "Additional recipients (document phone fields, roles, or fixed numbers). Leave empty to send only to the Phone Number Field."
   },
    {
     "fieldname": "section_break_fields",
@@ -192,12 +227,12 @@
    "fieldtype": "Section Break",
    "label": "Help"
   },
-  {
-   "fieldname": "help_html",
-   "fieldtype": "HTML",
-   "label": "Help",
-   "options": "<h4>SMS Notification</h4>\n<p>Triggered automatically when a document event occurs or on a schedule.</p>\n<h5>DocType Event</h5>\n<p>Set <b>Phone Number Field</b> to the fieldname containing the phone number (e.g. <code>mobile_no</code>).</p>\n<p><b>Condition</b> is evaluated as a Python expression. Use <code>doc</code> to access the document.</p>\n<h5>Scheduler Event</h5>\n<p>Set <b>Scheduler Data Source</b> to <code>Overdue Invoices</code> to send one message per overdue Sales Invoice (submitted, outstanding balance past due date). The template is chosen per recipient from the invoice or Customer language.</p>\n<p>Alternatively, in the Condition field set <code>doc.set('_contact_list', ['919123456789'])</code> or <code>doc.set('_data_list', [{'name': 'INV-001', 'phone_no': '919123456789'}])</code></p>\n<h5>Template</h5>\n<p>Link to an SMS Template for pre-approved messages, or write a Jinja template in the Message Template field.</p>"
-  }
+   {
+    "fieldname": "help_html",
+    "fieldtype": "HTML",
+    "label": "Help",
+    "options": "<h4>SMS Notification</h4>\n<p>Triggered automatically when a document event occurs or on a schedule.</p>\n<h5>DocType Event</h5>\n<p>Set <b>Phone Number Field</b> to the fieldname containing the phone number (e.g. <code>contact_mobile</code>), or add <b>Recipients</b> rows (document phone fields, roles, fixed numbers) for multiple recipients.</p>\n<p><b>Condition Type</b> <code>Python</code>: the Condition is a plain Python expression evaluated with <code>doc</code> as the document — must evaluate to True to send. <code>Filters</code>: build list-view style filters instead.</p>\n<h5>Scheduler Event</h5>\n<p>Set <b>Scheduler Data Source</b> to <code>Overdue Invoices</code> to send one message per overdue Sales Invoice (submitted, outstanding balance past due date). The template is chosen per recipient from the invoice or Customer language.</p>\n<p>Alternatively, in the Condition field set <code>doc.set('_contact_list', ['919123456789'])</code> or <code>doc.set('_data_list', [{'name': 'INV-001', 'phone_no': '919123456789'}])</code></p>\n<h5>Template</h5>\n<p>Link to an SMS Template for pre-approved messages, or write a Jinja template in the Message Template field.</p>"
+   }
  ],
  "permissions": [
   {

@@ -119,6 +119,7 @@ def _seed_default_notifications():
             "field_name": "contact_mobile",
             "template": "Overdue Invoice Reminder",
             "template_type": "Jinja",
+            "condition_type": "Python",
             "condition": _OVERDUE_CONDITION,
             "disabled": 0,
         },
@@ -130,6 +131,7 @@ def _seed_default_notifications():
             "field_name": "contact_mobile",
             "template": "Payment Reminder",
             "template_type": "Jinja",
+            "condition_type": "Python",
             "condition": _OVERDUE_CONDITION,
             "disabled": 1,
         },
@@ -141,6 +143,7 @@ def _seed_default_notifications():
             "field_name": "contact_mobile",
             "template": "Order Confirmation",
             "template_type": "Jinja",
+            "condition_type": "Python",
             "disabled": 1,
         },
         {
@@ -151,6 +154,7 @@ def _seed_default_notifications():
             "field_name": "contact_mobile",
             "template": "Dispatch Notification",
             "template_type": "Jinja",
+            "condition_type": "Python",
             "disabled": 1,
         },
         {
@@ -161,6 +165,7 @@ def _seed_default_notifications():
             "field_name": "contact_mobile",
             "template": "Payment Link",
             "template_type": "Jinja",
+            "condition_type": "Python",
             "disabled": 1,
         },
     ]

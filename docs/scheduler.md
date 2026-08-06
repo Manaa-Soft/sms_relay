@@ -195,7 +195,7 @@ All default templates (Payment Reminder, Order Confirmation, Dispatch Notificati
 | Send Dispatch Notification | DocType Event | Delivery Note → After Submit | Dispatch Notification | `contact_mobile` | Disabled |
 | Send Payment Link | DocType Event | Sales Invoice → After Submit | Payment Link | `contact_mobile` | Disabled |
 
-> **Phone Number Field:** Sales Order, Delivery Note and Sales Invoice all expose ERPNext's standard `contact_mobile` field (auto-filled from the customer's primary Contact). A notification sends only when that field is populated on the document.
+> **Phone Number Field:** Sales Order, Delivery Note and Sales Invoice all expose ERPNext's standard `contact_mobile` field (auto-filled from the customer's primary Contact). A notification sends only when that field is populated on the document. Use the **Recipients** table (Condition Type **Python**/**Filters** also available) to send to additional phones or roles.
 >
 > **Condition:** "Send Overdue Invoice Reminders" and "Send Payment Reminder" ship with the overdue gate above (unpaid balance + past due date) so they never fire on freshly submitted, on-time, or fully paid invoices. The upgrade fills the Condition only when the field is blank — your own expressions are never overwritten.
 >

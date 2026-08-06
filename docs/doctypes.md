@@ -291,15 +291,18 @@ Doc-triggered automated SMS rules with Jinja or Parameter templates.
 | Field | Type | Description |
 |---|---|---|
 | notification_name | Data | Unique name |
-| notification_type | Select | DocType notification / Scheduler Event |
+| notification_type | Select | DocType Event / Scheduler Event |
 | disabled | Check | Disable this rule |
 | reference_doctype | Link: DocType | Target DocType |
 | doctype_event | Select | On Submit / On Save / On Validate / etc. |
-| field_name | Data | Field containing phone number |
+| field_name | Data | Primary phone field on the DocType (Recipients rows are sent in addition) |
 | template | Link: SMS Template | Linked SMS Template |
 | template_type | Select | **Jinja** or **Parameter** — controls how the template body is rendered |
 | message_template | Code (HTML) | Template body (auto-loaded from linked template) |
+| condition_type | Select | **Python** (Condition expression) or **Filters** (list-view style filters) |
 | condition | Code (Python) | Expression that must evaluate to True to send; `doc` is the triggering document. Plain expression, no `return` prefix. Empty = always send |
+| filters | Code (JSON) | Filters for Condition Type = **Filters** (built with the filters editor) |
+| recipients | Table: SMS Notification Recipient | Additional recipients — document phone fields, roles, or fixed numbers, each with an optional per-row Condition |
 | event_frequency | Select | How often to trigger |
 | scheduler_data_source | Select | `Overdue Invoices` — send one message per overdue Sales Invoice (submitted, outstanding balance past due date); template selected per invoice/Customer language |
 | days_in_advance | Int | For scheduled: days before date field |
@@ -307,6 +310,24 @@ Doc-triggered automated SMS rules with Jinja or Parameter templates.
 | set_property_after_alert | Data | Field to update after sending |
 | property_value | Data | Value to set |
 | fields | Table: SMS Message Field | Positional parameter mappings (Parameter mode only) |
+
+### Condition Type
+
+- **Python** — the **Condition** field is a plain Python expression evaluated with `doc` as the triggering document (`(doc.grand_total or 0) > 1000`). Must be a single expression, no `return` prefix.
+- **Filters** — build list-view style filters (e.g. `status = Received`) in the filters editor; evaluated with `evaluate_filters` against the document. Targets top-level document fields.
+
+### Recipients
+
+Each row in the **Recipients** table (child doctype **SMS Notification Recipient**) adds a phone number to the send list; all resolved phones are sent (deduplicated):
+
+| Field | Type | Description |
+|---|---|---|
+| receiver_by_document_field | Select | A phone field on the document, or a child-table field (`field,parent`) |
+| receiver_by_role | Link: Role | Sends to all enabled Users with the role (their `mobile_no`) |
+| recipient_phone | Data | Always send to this fixed international number |
+| condition | Data | Optional Python expression — only this row sends when True |
+
+Rows with no document field, role, or fixed number are rejected on save. If the Recipients table is empty, only the **Phone Number Field** is used (legacy single-recipient behaviour).
 
 ### Template Type
 

@@ -207,29 +207,45 @@ Add rows to the **Fields** child table to map `{{1}}`, `{{2}}`, etc. to document
 
 You can mix both syntaxes in **Jinja** mode — Jinja2 `{{ doc.field }}` and positional `{{1}}` work together.
 
-### Condition Examples
+### Condition Type
 
-The Condition is a plain Python expression (evaluated with `frappe.safe_eval`), **not** a `return` statement. `doc` is the triggering document — attribute access works, and dates are real `date` objects (compare with `getdate`).
+Two ways to gate a send:
 
-```python
-# Only send for invoices over 1000
-(doc.grand_total or 0) > 1000
+- **Python** — the **Condition** field is a plain expression (evaluated with `frappe.safe_eval`), **not** a `return` statement. `doc` is the triggering document — attribute access works, and dates are real `date` objects (compare with `getdate`).
 
-# Only send if customer has outstanding
-(doc.outstanding_amount or 0) > 0
+  ```python
+  # Only send for invoices over 1000
+  (doc.grand_total or 0) > 1000
 
-# Only send on specific payment method
-doc.mode_of_payment == "Bank Transfer"
+  # Only send if customer has outstanding
+  (doc.outstanding_amount or 0) > 0
 
-# Only send for genuinely overdue invoices (seeded default for the two reminder notifications)
-(doc.outstanding_amount or 0) > 0 and doc.due_date and frappe.utils.getdate(doc.due_date) < frappe.utils.getdate()
-```
+  # Only send on specific payment method
+  doc.mode_of_payment == "Bank Transfer"
 
-`frappe` and its helpers (`frappe.utils.getdate`, `frappe.utils.nowdate`, …) are available in the expression. Empty Condition = always send (subject to the other rules).
+  # Only send for genuinely overdue invoices (seeded default for the two reminder notifications)
+  (doc.outstanding_amount or 0) > 0 and doc.due_date and frappe.utils.getdate(doc.due_date) < frappe.utils.getdate()
+  ```
+
+  `frappe` and its helpers (`frappe.utils.getdate`, `frappe.utils.nowdate`, …) are available in the expression. Empty Condition = always send (subject to the other rules).
+
+- **Filters** — choose `Condition Type = Filters` and build list-view style filters (e.g. `Status = Received`) in the editor. Evaluated with `evaluate_filters` against the document; targets top-level document fields.
+
+### Recipients
+
+By default a DocType Event sends to the **Phone Number Field** (one number). To send to several numbers, add **Recipients** rows — each row contributes phones from a document field, a role, or a fixed number, and can carry its own per-row Condition:
+
+| Row source | What it adds |
+|---|---|
+| **Receiver By Document Field** | The value(s) of a phone field on the document, or a child-table field (`field,parent`) |
+| **Receiver By Role** | The `mobile_no` of every enabled User with the role |
+| **Recipient Phone** | A fixed international number |
+
+All resolved phones are sent, deduplicated. Each phone still passes through `clean_phone` and the opt-out check.
 
 ### Phone Resolution Order
 
-1. `field_name` value on the document
+1. `field_name` value on the document (and any Recipients rows)
 2. Customer/Supplier linked Contact phone
 3. Document `mobile_no` or `phone` field
 

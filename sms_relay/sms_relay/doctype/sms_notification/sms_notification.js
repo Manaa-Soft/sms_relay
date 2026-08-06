@@ -47,6 +47,77 @@ frappe.notification = {
 		});
 	},
 
+	setup_recipient_field_options: function (frm) {
+		if (!frm.doc.reference_doctype) {
+			return;
+		}
+
+		frappe.model.with_doctype(frm.doc.reference_doctype, function () {
+			let is_phone_field = function (df) {
+				if (df.fieldtype !== "Data") {
+					return false;
+				}
+				return (
+					df.options === "Phone" ||
+					df.options === "Mobile" ||
+					/mobile|phone/i.test(df.fieldname)
+				);
+			};
+
+			let get_select_options = function (df, parent_field) {
+				let select_value = parent_field ? df.fieldname + "," + parent_field : df.fieldname;
+				let path = parent_field ? parent_field + " > " + df.fieldname : df.fieldname;
+				return {
+					value: select_value,
+					label: path + " (" + __(df.label, null, df.parent) + ")",
+				};
+			};
+
+			let fields = frappe.get_doc("DocType", frm.doc.reference_doctype).fields;
+
+			let extract = function (df) {
+				if (frappe.model.table_fields.includes(df.fieldtype)) {
+					let child_fields = frappe.get_doc("DocType", df.options).fields;
+					return $.map(child_fields, function (cdf) {
+						return is_phone_field(cdf) ? get_select_options(cdf, df.fieldname) : null;
+					});
+				}
+				return is_phone_field(df) ? get_select_options(df) : null;
+			};
+
+			let options = $.map(fields, extract);
+			frm.fields_dict.recipients.grid.update_docfield_property(
+				"receiver_by_document_field",
+				"options",
+				[""].concat(options)
+			);
+		});
+	},
+
+	set_up_filters_editor: function (frm) {
+		let parent = frm.get_field("filters_editor").$wrapper;
+		parent.empty();
+
+		if (!frm.doc.reference_doctype || frm.doc.condition_type !== "Filters") {
+			return;
+		}
+
+		let filters =
+			frm.doc.filters && frm.doc.filters !== "[]" ? JSON.parse(frm.doc.filters) : [];
+
+		frappe.model.with_doctype(frm.doc.reference_doctype, function () {
+			let filter_group = new frappe.ui.FilterGroup({
+				parent: parent,
+				doctype: frm.doc.reference_doctype,
+				on_change: function () {
+					frm.set_value("filters", JSON.stringify(filter_group.get_filters()));
+				},
+			});
+
+			filter_group.add_filters_to_filter_group(filters);
+		});
+	},
+
 	populate_template_params: function (frm) {
 		if (!frm.doc.template || !frm.doc.reference_doctype) {
 			return;
@@ -85,6 +156,8 @@ frappe.notification = {
 frappe.ui.form.on('SMS Notification', {
 	refresh: function(frm) {
 		frappe.notification.setup_fieldname_select(frm);
+		frappe.notification.setup_recipient_field_options(frm);
+		frappe.notification.set_up_filters_editor(frm);
 		let is_parameter = frm.doc.template_type === "Parameter";
 		frm.toggle_display("section_break_fields", is_parameter);
 		frm.toggle_display("fields", is_parameter);
@@ -135,11 +208,21 @@ frappe.ui.form.on('SMS Notification', {
 	},
 	reference_doctype: function(frm) {
 		frappe.notification.setup_fieldname_select(frm);
+		frappe.notification.setup_recipient_field_options(frm);
+		frappe.notification.set_up_filters_editor(frm);
 	},
 	template_type: function(frm) {
 		let is_parameter = frm.doc.template_type === "Parameter";
 		frm.toggle_display("section_break_fields", is_parameter);
 		frm.toggle_display("fields", is_parameter);
+	},
+	condition_type: function(frm) {
+		if (frm.doc.condition_type === "Filters") {
+			frm.set_value("condition", "");
+		} else {
+			frm.set_value("filters", "");
+		}
+		frappe.notification.set_up_filters_editor(frm);
 	},
 });
 

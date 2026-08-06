@@ -1,4 +1,6 @@
 """SMS Notification — mirrors WhatsApp Notification pattern."""
+import json
+
 import frappe
 from frappe import _
 from frappe.model.document import Document
@@ -28,6 +30,24 @@ class SMSNotification(Document):
                     )
                 )
 
+            for row in self.get("recipients") or []:
+                if not (row.receiver_by_document_field or row.receiver_by_role or row.recipient_phone):
+                    frappe.throw(
+                        _("Recipient row {0}: set a document field, role, or phone number").format(row.idx)
+                    )
+                if row.receiver_by_document_field and not self._field_exists(row.receiver_by_document_field):
+                    frappe.throw(
+                        _("Recipient row {0}: field {1} does not exist on {2}").format(
+                            row.idx, row.receiver_by_document_field, self.reference_doctype
+                        )
+                    )
+
+        if self.get("condition_type") == "Filters" and self.filters:
+            try:
+                json.loads(self.filters)
+            except (ValueError, TypeError):
+                frappe.throw(_("Filters must be valid JSON"))
+
         if self.set_property_after_alert:
             meta = frappe.get_meta(self.reference_doctype)
             if not meta.get_field(self.set_property_after_alert):
@@ -47,31 +67,33 @@ class SMSNotification(Document):
         doc_data = doc.as_dict()
         effective_template = self._resolve_language_template(template or self.template, doc)
 
-        if self.condition and not ignore_condition:
-            if not frappe.safe_eval(
-                self.condition, get_safe_globals(), dict(doc=doc_data)
-            ):
-                return
-
-        if self.field_name:
-            phone_number = phone_no or doc_data.get(self.field_name)
-        else:
-            phone_number = phone_no
-
-        if not phone_number:
+        if not ignore_condition and not self._condition_matches(doc_data):
             return
 
-        cleaned = clean_phone(str(phone_number))
-        if not cleaned:
-            return
-        if is_opted_out(cleaned):
+        phones = self._resolve_recipient_phones(doc_data, phone_no)
+        if not phones:
             return
 
         message = self._render_message(doc, effective_template)
         if not message:
             return
 
-        self._send_sms(cleaned, message, doc_data, effective_template)
+        for phone in phones:
+            cleaned = clean_phone(str(phone))
+            if not cleaned:
+                continue
+            if is_opted_out(cleaned):
+                continue
+            self._send_sms(cleaned, message, doc_data, effective_template)
+            frappe.get_doc({
+                "doctype": "SMS Notification Log",
+                "notification": self.name,
+                "reference_doctype": doc_data.get("doctype"),
+                "reference_name": doc_data.get("name"),
+                "phone": cleaned,
+                "message": message,
+                "status": "Sent",
+            }).insert(ignore_permissions=True)
 
         if doc_data and self.set_property_after_alert:
             prop_name = self.set_property_after_alert
@@ -90,16 +112,6 @@ class SMSNotification(Document):
                     )
 
         frappe.msgprint(_("SMS triggered"), indicator="green", alert=True)
-
-        frappe.get_doc({
-            "doctype": "SMS Notification Log",
-            "notification": self.name,
-            "reference_doctype": doc_data.get("doctype"),
-            "reference_name": doc_data.get("name"),
-            "phone": cleaned,
-            "message": message,
-            "status": "Sent",
-        }).insert(ignore_permissions=True)
 
     # ─── Scheduler Event path ────────────────────────────────────────
 
@@ -198,6 +210,94 @@ class SMSNotification(Document):
         return template_name
 
     # ─── Shared helpers ──────────────────────────────────────────────
+
+    def _condition_matches(self, doc_data):
+        """Evaluate the configured Condition (Python expression or Filters)."""
+        if self.get("condition_type") == "Filters":
+            if not self.filters:
+                return True
+            try:
+                filters = json.loads(self.filters)
+            except (ValueError, TypeError):
+                return False
+            from frappe.utils.data import evaluate_filters
+            return evaluate_filters(doc_data, filters)
+        if self.condition:
+            return bool(frappe.safe_eval(
+                self.condition, get_safe_globals(), dict(doc=doc_data)
+            ))
+        return True
+
+    def _resolve_recipient_phones(self, doc_data, phone_no=None):
+        """Resolve the list of recipient phone numbers.
+
+        When Recipients rows exist (DocType Event) each row contributes phone
+        numbers from a document field, a Role, or a fixed number, subject to
+        its per-row Condition. Otherwise the legacy single-phone behaviour
+        applies: an explicit ``phone_no`` wins over ``field_name``.
+        """
+        recipients = self.get("recipients") or []
+        if recipients and self.notification_type == "DocType Event":
+            phones = []
+            if phone_no:
+                phones.append(phone_no)
+            for row in recipients:
+                if not self._recipient_row_matches(row, doc_data):
+                    continue
+                if row.receiver_by_document_field:
+                    phones.extend(self._doc_field_phones(row.receiver_by_document_field, doc_data))
+                if row.receiver_by_role:
+                    phones.extend(self._role_phones(row.receiver_by_role))
+                if row.recipient_phone:
+                    phones.append(row.recipient_phone)
+            return list(dict.fromkeys(p for p in phones if p))
+        if phone_no:
+            return [phone_no]
+        if self.field_name:
+            value = doc_data.get(self.field_name)
+            return [value] if value else []
+        return []
+
+    def _recipient_row_matches(self, row, doc_data):
+        """Per-recipient row Condition (Python expression)."""
+        if not row.get("condition"):
+            return True
+        return bool(frappe.safe_eval(
+            row.condition, get_safe_globals(), dict(doc=doc_data)
+        ))
+
+    def _doc_field_phones(self, field_ref, doc_data):
+        """Collect phone numbers from a document field (or ``child_field,parent_field``)."""
+        fragments = field_ref.split(",")
+        data_field, child_field = fragments[0], (fragments[1] if len(fragments) > 1 else None)
+        values = []
+        if child_field:
+            rows = doc_data.get(child_field) or []
+            for row in rows:
+                if isinstance(row, dict) and row.get(data_field):
+                    values.append(row.get(data_field))
+        else:
+            value = doc_data.get(data_field)
+            if value:
+                values.append(value)
+        return values
+
+    def _role_phones(self, role):
+        """Mobile numbers of all enabled Users with the given role."""
+        from frappe.core.doctype.role.role import get_info_based_on_role
+        return get_info_based_on_role(role, "mobile_no") or []
+
+    def _field_exists(self, field_ref):
+        """Check a field (or ``child_field,parent_field`` table field) on the reference DocType."""
+        meta = frappe.get_meta(self.reference_doctype)
+        fragments = field_ref.split(",")
+        data_field, parent_field = fragments[0], (fragments[1] if len(fragments) > 1 else None)
+        if parent_field:
+            parent_df = meta.get_field(parent_field)
+            if not parent_df or parent_df.fieldtype != "Table":
+                return False
+            return frappe.get_meta(parent_df.options).has_field(data_field)
+        return meta.has_field(data_field)
 
     def _render_message(self, doc, template=None):
         """Render message based on template_type.

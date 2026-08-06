@@ -317,3 +317,172 @@ class TestConditionGating(SMSRelayTestCase):
         notification.send_template_message(self._invoice_doc(due_date=None))
 
         mock_enqueue.assert_not_called()
+
+
+class TestFiltersCondition(SMSRelayTestCase):
+    """Condition Type = Filters gates the send via evaluate_filters."""
+
+    def setUp(self):
+        super().setUp()
+        self._create_template()
+
+    def _create_template(self):
+        if not frappe.db.exists("SMS Template", "Filters Test Template"):
+            tmpl = frappe.new_doc("SMS Template")
+            tmpl.template_name = "Filters Test Template"
+            tmpl.category = "UTILITY"
+            tmpl.language = "en"
+            tmpl.message_template = "Hello {{ doc.customer }}."
+            tmpl.insert(ignore_permissions=True)
+
+    def _create_notification(self, filters):
+        if frappe.db.exists("SMS Notification", "Filters Test"):
+            frappe.delete_doc("SMS Notification", "Filters Test", force=1)
+        n = frappe.new_doc("SMS Notification")
+        n.notification_name = "Filters Test"
+        n.notification_type = "DocType Event"
+        n.reference_doctype = "Sales Invoice"
+        n.doctype_event = "After Submit"
+        n.field_name = "contact_mobile"
+        n.template = "Filters Test Template"
+        n.template_type = "Jinja"
+        n.condition_type = "Filters"
+        n.filters = filters
+        n.disabled = 0
+        n.insert(ignore_permissions=True)
+
+    def _invoice_doc(self, status="Received", contact_mobile="+967777715787"):
+        data = frappe._dict({
+            "doctype": "Sales Invoice",
+            "name": "ACC-SINV-2026-00033",
+            "customer": "Faissal Mannaa",
+            "status": status,
+            "contact_mobile": contact_mobile,
+        })
+        data.as_dict = lambda: data
+        return data
+
+    @patch("sms_relay.core.sms_engine._enqueue_sms")
+    def test_filters_match_sends(self, mock_enqueue):
+        self._create_notification('[["status", "=", "Received"]]')
+        notification = frappe.get_doc("SMS Notification", "Filters Test")
+        notification.send_template_message(self._invoice_doc(status="Received"))
+
+        mock_enqueue.assert_called_once()
+
+    @patch("sms_relay.core.sms_engine._enqueue_sms")
+    def test_filters_no_match_skips(self, mock_enqueue):
+        self._create_notification('[["status", "=", "Received"]]')
+        notification = frappe.get_doc("SMS Notification", "Filters Test")
+        notification.send_template_message(self._invoice_doc(status="Open"))
+
+        mock_enqueue.assert_not_called()
+
+    def test_invalid_filters_rejected_on_save(self):
+        n = frappe.new_doc("SMS Notification")
+        n.notification_name = "Filters Test"
+        n.notification_type = "DocType Event"
+        n.reference_doctype = "Sales Invoice"
+        n.doctype_event = "After Submit"
+        n.field_name = "contact_mobile"
+        n.template = "Filters Test Template"
+        n.template_type = "Jinja"
+        n.condition_type = "Filters"
+        n.filters = "not json"
+        with self.assertRaises(Exception):
+            n.insert(ignore_permissions=True)
+
+
+class TestRecipients(SMSRelayTestCase):
+    """Recipients child table resolves multiple phones (document field, role, fixed)."""
+
+    def setUp(self):
+        super().setUp()
+        self._create_template()
+
+    def _create_template(self):
+        if not frappe.db.exists("SMS Template", "Recipients Test Template"):
+            tmpl = frappe.new_doc("SMS Template")
+            tmpl.template_name = "Recipients Test Template"
+            tmpl.category = "TRANSACTIONAL"
+            tmpl.language = "en"
+            tmpl.message_template = "Hello {{ doc.customer }}."
+            tmpl.insert(ignore_permissions=True)
+
+    def _create_notification(self, rows):
+        if frappe.db.exists("SMS Notification", "Recipients Test"):
+            frappe.delete_doc("SMS Notification", "Recipients Test", force=1)
+        n = frappe.new_doc("SMS Notification")
+        n.notification_name = "Recipients Test"
+        n.notification_type = "DocType Event"
+        n.reference_doctype = "Sales Invoice"
+        n.doctype_event = "After Submit"
+        n.template = "Recipients Test Template"
+        n.template_type = "Jinja"
+        n.disabled = 0
+        for row in rows:
+            n.append("recipients", row)
+        n.insert(ignore_permissions=True)
+
+    def _invoice_doc(self, contact_mobile="+967777715787", grand_total=None):
+        data = frappe._dict({
+            "doctype": "Sales Invoice",
+            "name": "ACC-SINV-2026-00033",
+            "customer": "Faissal Mannaa",
+            "contact_mobile": contact_mobile,
+        })
+        if grand_total is not None:
+            data["grand_total"] = grand_total
+        data.as_dict = lambda: data
+        return data
+
+    @patch("sms_relay.core.sms_engine._enqueue_sms")
+    def test_document_field_and_fixed_phone(self, mock_enqueue):
+        self._create_notification([
+            {"receiver_by_document_field": "contact_mobile"},
+            {"recipient_phone": "+967700000003"},
+        ])
+        notification = frappe.get_doc("SMS Notification", "Recipients Test")
+        notification.send_template_message(self._invoice_doc())
+
+        phones = [c.kwargs["phone"] for c in mock_enqueue.call_args_list]
+        self.assertEqual(len(phones), 2)
+        self.assertIn("+967777715787", phones)
+        self.assertIn("+967700000003", phones)
+
+    @patch("sms_relay.core.sms_engine._enqueue_sms")
+    @patch("frappe.core.doctype.role.role.get_info_based_on_role")
+    def test_role_recipient(self, mock_role, mock_enqueue):
+        mock_role.return_value = ["+967700000001", "+967700000002"]
+        self._create_notification([
+            {"receiver_by_role": "Sales Manager"},
+        ])
+        notification = frappe.get_doc("SMS Notification", "Recipients Test")
+        notification.send_template_message(self._invoice_doc())
+
+        mock_role.assert_called_once_with("Sales Manager", "mobile_no")
+        phones = [c.kwargs["phone"] for c in mock_enqueue.call_args_list]
+        self.assertEqual(sorted(phones), ["+967700000001", "+967700000002"])
+
+    @patch("sms_relay.core.sms_engine._enqueue_sms")
+    def test_per_row_condition_gates_recipient(self, mock_enqueue):
+        self._create_notification([
+            {"recipient_phone": "+967700000003", "condition": "(doc.grand_total or 0) > 1000"},
+            {"recipient_phone": "+967700000004", "condition": "(doc.grand_total or 0) <= 1000"},
+        ])
+        notification = frappe.get_doc("SMS Notification", "Recipients Test")
+        notification.send_template_message(self._invoice_doc(grand_total=500))
+
+        phones = [c.kwargs["phone"] for c in mock_enqueue.call_args_list]
+        self.assertEqual(phones, ["+967700000004"])
+
+    @patch("sms_relay.core.sms_engine._enqueue_sms")
+    def test_dedupes_phones(self, mock_enqueue):
+        self._create_notification([
+            {"receiver_by_document_field": "contact_mobile"},
+            {"recipient_phone": "+967777715787"},
+        ])
+        notification = frappe.get_doc("SMS Notification", "Recipients Test")
+        notification.send_template_message(self._invoice_doc())
+
+        self.assertEqual(mock_enqueue.call_count, 1)
