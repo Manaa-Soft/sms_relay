@@ -59,8 +59,12 @@ ERPNext (Invoice/Payment/Delivery/PO)
 - **Document notifications** — Jinja or Parameter templates triggered on any DocType event
 - **Template types** — Jinja (`{{ doc.field }}`) or Parameter (`{{1}}`, `{{2}}` positional)
 - **Async queue** — Priority tiers (High for OTP/Payment, Low for marketing)
+- **Data SMS / binary messages** — Send base64 payloads with a destination port
+- **JWT authentication** — Optional scoped access tokens (falls back to Basic)
+- **Webhook self-registration** — SMS Relay provisions all gateway webhooks automatically on Connect Device
 - **SMS Opt Out** — Automatic STOP blacklist with cache invalidation
-- **Delivery tracking** — Webhook delivery receipts with HMAC-SHA256 verification
+- **Delivery tracking** — Webhook delivery receipts with HMAC-SHA256 verification + hourly status-polling fallback
+- **Inbox backfill** — Hourly sweep of the device inbox so missed messages are not lost
 - **Message cancellation** — Cancel queued messages before sending
 - **Message scheduling** — Defer SMS with `schedule_at` and TTL/expiry
 - **Idempotency** — `message_id` prevents duplicate sends
@@ -133,6 +137,10 @@ bench restart
 | Enable Incoming Webhooks | Receive delivery receipts |
 | Webhook Max Retries | Max webhook retry attempts (default: 15) |
 | Webhook Base Delay | Exponential backoff base delay (default: 30s) |
+| Webhook URL | Webhook target URL (empty = auto-detect) |
+| Use JWT Authentication | Issue scoped JWT tokens instead of Basic auth |
+| Enable Inbox Sync | Hourly backfill of the device inbox |
+| Enable Delivery Status Sync | Hourly delivery-status reconciliation (default: on) |
 
 ### 2. Add SMS Devices
 
@@ -150,7 +158,7 @@ bench restart
 | Hourly/Daily Quota | Rate limits |
 | Active | Enable/disable |
 
-Click **Connect Device** to auto-fetch device info from the gateway.
+Click **Connect Device** to auto-fetch device info from the gateway — this also **registers all gateway webhooks automatically**, so no manual webhook setup in the app/server is required.
 
 ### 3. Create SMS Templates (Optional)
 
@@ -264,6 +272,11 @@ frappe.call({
 |---|---|
 | `sms_relay.api.endpoints.test_connection` | Test gateway connectivity (accepts optional `device_name` arg) |
 | `sms_relay.api.endpoints.connect_device` | Fetch device info from gateway (requires `device_name`) |
+| `sms_relay.api.endpoints.register_device_webhooks` | Provision/reconcile gateway webhooks for a device |
+| `sms_relay.api.endpoints.get_webhook_registrations` | List stored webhook registrations for a device |
+| `sms_relay.api.endpoints.refresh_device_inbox` | Rescan device inbox and import received SMS |
+| `sms_relay.api.endpoints.get_message_status` | Fetch gateway state for a sent message |
+| `sms_relay.api.endpoints.get_device_logs` | Fetch recent gateway server logs |
 | `sms_relay.api.endpoints.get_device_health` | Device health, battery, signal, quota usage |
 | `sms_relay.api.endpoints.get_structured_health` | Per-device pass/warn/fail checks with failure rates |
 | `sms_relay.api.endpoints.get_device_settings` | Get device settings from gateway |
@@ -300,6 +313,8 @@ Event fields (`sender`, `message`, `simNumber`, `reason`, `partsCount`, `simCard
 
 Supported events: `sms:delivered`, `sms:failed`, `sms:sent`, `sms:cancelled`, `sms:received`, `sms:data-received`, `mms:received`, `mms:downloaded`, `app:started`, `system:ping`
 
+**Automatic registration** — SMS Relay registers all of the above webhooks itself via `POST /webhooks` when you click **Connect Device** (or call `register_device_webhooks`). No manual app-side or `config.yml` setup is needed. Registrations are stored per device in `Webhook Registrations`; `reconcile_webhooks` deletes stray entries and re-provisions missing ones.
+
 **Webhook signatures** — the app signs every webhook by default (it auto-generates a random key). To verify, set **Webhook HMAC Secret** in SMS Relay Settings to the app's signing key (App settings → Webhooks → signing key). Both schemes are accepted:
 
 1. **Android SMS Gateway app** (recommended): the app sends `X-Signature` (HMAC-SHA256 hex of `<raw body><timestamp>`) plus `X-Timestamp` (unix seconds). Timestamps older than 15 minutes or more than 60 seconds in the future are rejected — keep device clocks in sync.
@@ -319,6 +334,8 @@ Supported events: `sms:delivered`, `sms:failed`, `sms:sent`, `sms:cancelled`, `s
 | Every minute | `process_bulk_messages` | Process bulk campaign batches |
 | Every minute | `process_webhook_deliveries` | Retry failed webhook deliveries with backoff |
 | Hourly | `check_device_health` | Heartbeat, battery, signal checks |
+| Hourly | `sync_delivery_status` | Delivery-status reconciliation via gateway API |
+| Hourly | `sync_device_inbox` | Backfill device inbox into SMS Queue |
 | Daily | `send_overdue_reminders` | Overdue invoice notifications |
 | Daily | `retry_failed_sms` | Re-enqueue retryable failures |
 | Daily | `cleanup_old_logs` | Purge old SMS Log entries (90-day retention) |
@@ -333,6 +350,11 @@ sms_relay/sms_relay/
 │   ├── notification_handler.py # Doc-event triggers with Jinja
 │   ├── bulk_engine.py          # CSV import, batch processing
 │   └── sms_utils.py            # Phone utils, GSM-7, HMAC verify
+├── gateway/
+│   ├── client.py               # SMSGate 3rd-party API client (JWT/Basic, messages, webhooks, inbox)
+│   ├── webhooks.py             # Webhook self-registration + reconciliation
+│   ├── inbox.py                # Inbox backfill into SMS Queue
+│   └── status.py               # Delivery-status polling fallback
 ├── api/
 │   ├── webhook_receiver.py     # Incoming SMS + delivery reports
 │   └── endpoints.py            # REST API endpoints

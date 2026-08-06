@@ -21,6 +21,8 @@ Send an SMS immediately, bypassing the queue.
 | ttl_seconds | int | No | Time-to-live in seconds (message expires if not sent within window) |
 | valid_until | str | No | Absolute expiry time (YYYY-MM-DD HH:MM:SS) |
 | schedule_at | str | No | Deferred send time (YYYY-MM-DD HH:MM:SS) |
+| data_payload | str | No | Base64-encoded binary/data SMS payload (sends a data message instead of text) |
+| data_port | int | No | Destination port for the data message (0-65535) |
 
 *Either `message` or `template` is required.
 
@@ -145,6 +147,135 @@ Fetch device info from the SMS Gateway server and auto-fill SMS Device fields.
 Queries:
 - `GET {server_url}/api/mobile/v1/device` — device details (Basic Auth)
 - `GET {server_url}/health` — online status (no auth)
+
+**Webhook self-registration:** on success, the gateway webhooks for every supported event are provisioned automatically (see `register_device_webhooks`) and returned under `webhooks`:
+
+```json
+{
+    "success": true,
+    "updates": { ... },
+    "webhooks": [{"event": "sms:received", "id": "wh-1", "url": "https://site/api/method/sms_relay.api.webhook_receiver.incoming_webhook"}]
+}
+```
+
+---
+
+## register_device_webhooks
+
+Provision every supported gateway webhook event for a device (idempotent — missing ones are created, existing matching ones are kept).
+
+**Path:** `sms_relay.api.endpoints.register_device_webhooks`
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|---|---|---|---|
+| device_name | str | Yes | SMS Device document name |
+| reconcile | int | No | 1 to also delete stray webhooks (URL/event mismatch) before re-provisioning |
+
+**Returns:**
+```json
+{
+    "status": "ok",
+    "webhooks": [
+        {"event": "sms:received", "id": "wh-1", "url": "https://site/api/method/sms_relay.api.webhook_receiver.incoming_webhook"},
+        {"event": "sms:delivered", "id": "wh-2", "url": "https://site/api/method/sms_relay.api.webhook_receiver.incoming_webhook"}
+    ]
+}
+```
+
+---
+
+## get_webhook_registrations
+
+Return the webhook registrations stored for a device.
+
+**Path:** `sms_relay.api.endpoints.get_webhook_registrations`
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|---|---|---|---|
+| device_name | str | Yes | SMS Device document name |
+
+**Returns:**
+```json
+[{"event": "sms:received", "id": "wh-1", "url": "https://site/api/method/sms_relay.api.webhook_receiver.incoming_webhook"}]
+```
+
+---
+
+## refresh_device_inbox
+
+Ask the device to rescan its inbox (`POST /inbox/refresh`), then import messages into `SMS Queue` (status **Received**), deduplicated by the gateway inbox message id.
+
+**Path:** `sms_relay.api.endpoints.refresh_device_inbox`
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|---|---|---|---|
+| device_name | str | Yes | SMS Device document name |
+| limit | int | No | Max messages per pass (default: 100) |
+
+**Returns:**
+```json
+{
+    "status": "ok",
+    "created": 3,
+    "total": 12
+}
+```
+
+---
+
+## get_message_status
+
+Fetch the gateway's current state for a previously sent message (used for delivery-status reconciliation).
+
+**Path:** `sms_relay.api.endpoints.get_message_status`
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|---|---|---|---|
+| device_name | str | Yes | SMS Device document name |
+| gateway_message_id | str | Yes | Gateway message id (stored on SMS Queue / SMS Log) |
+
+**Returns:**
+```json
+{
+    "success": true,
+    "message": {
+        "id": "gateway-message-id",
+        "state": "Delivered",
+        "recipients": [{"phoneNumber": "+1234567890", "state": "Delivered"}]
+    }
+}
+```
+
+---
+
+## get_device_logs
+
+Fetch recent gateway server logs for a device.
+
+**Path:** `sms_relay.api.endpoints.get_device_logs`
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|---|---|---|---|
+| device_name | str | Yes | SMS Device document name |
+| limit | int | No | Max log entries (default: 100) |
+
+**Returns:**
+```json
+{
+    "success": true,
+    "logs": [...]
+}
+```
 
 ---
 
@@ -621,6 +752,8 @@ Overrides `frappe.core.doctype.sms_settings.sms_settings.send_sms`. All outgoing
 | Every minute | process_bulk_messages | sms_relay.tasks.process_bulk_messages |
 | Every minute | process_webhook_deliveries | sms_relay.tasks.process_webhook_deliveries |
 | Hourly | check_device_health | sms_relay.tasks.check_device_health |
+| Hourly | sync_delivery_status | sms_relay.tasks.sync_delivery_status |
+| Hourly | sync_device_inbox | sms_relay.tasks.sync_device_inbox |
 | Daily | send_overdue_reminders | sms_relay.tasks.send_overdue_reminders |
 | Daily | retry_failed_sms | sms_relay.tasks.retry_failed_sms |
 | Daily | cleanup_old_logs | sms_relay.tasks.cleanup_old_logs |

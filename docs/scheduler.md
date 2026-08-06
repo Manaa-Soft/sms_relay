@@ -124,6 +124,41 @@ sms_relay registers jobs with the Frappe scheduler. These run automatically at t
 
 ---
 
+## sync_delivery_status
+
+**Frequency:** Hourly (skipped when **Enable Delivery Status Sync** is off)
+
+**Purpose:** Delivery-status reconciliation fallback for messages whose terminal webhook was never received (e.g. the site was down when the report fired).
+
+**What it does:**
+1. Finds SMS Queue entries with status "Sent", a `gateway_message_id`, and `modified` older than **Status Sync Age (minutes)** (default 30)
+2. For each: `GET /messages/{id}` (fallback `/message/{id}`) via the device's gateway client
+3. Maps the gateway `ProcessingState` to SMS Relay status:
+   - `Processed`/`Sent` → Sent
+   - `Delivered` → Delivered (sets `delivery_status` + `delivered_at`)
+   - `Failed` → Failed (captures per-recipient error into `SMS Log.error_message`)
+   - `Cancelled`/`Cancelling` → Cancelled
+4. Updates the SMS Queue row and every SMS Log row sharing the `gateway_message_id`
+5. Commits changes
+
+---
+
+## sync_device_inbox
+
+**Frequency:** Hourly (skipped when **Enable Inbox Sync** is off)
+
+**Purpose:** Backfill incoming SMS from the device's stored inbox so messages that arrived while the site was unreachable are not lost.
+
+**What it does:**
+1. For each active Android SMS Gateway device: `GET /inbox` (up to 100 messages)
+2. Skips messages already imported (deduped by gateway inbox message id)
+3. Creates an SMS Queue entry per message with status **Received**, `recipient` = sender, `message` = content preview, `sim_number` from the message
+4. Commits changes
+
+Messages are also imported in real time via `sms:received` webhooks; the inbox sweep is only a safety net.
+
+---
+
 ## send_overdue_reminders
 
 **Frequency:** Daily
@@ -192,6 +227,8 @@ scheduler_events = {
     ],
     "hourly": [
         "sms_relay.tasks.check_device_health",
+        "sms_relay.tasks.sync_delivery_status",
+        "sms_relay.tasks.sync_device_inbox",
         "sms_relay.utils.trigger_sms_notifications_hourly",
     ],
     "daily": [

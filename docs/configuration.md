@@ -9,12 +9,23 @@ Singleton DocType — one record for the entire site.
 ### Gateway
 
 | Field | Type | Default | Description |
-|---|---|---|---|
+|---|---|---|---|---|
 | Enabled | Check | 1 | Master toggle. When off, no SMS is sent. |
 | Server URL | Data | — | Gateway server URL (e.g. `http://192.168.1.15:8085`). |
-| API Path | Data | /api/3rdparty/v1/message | API endpoint path. |
+| API Path | Data | /api/3rdparty/v1/message | API endpoint path. Used to derive the API base (`/api/3rdparty/v1`). |
 | Timeout | Int | 15 | HTTP timeout in seconds. |
 | Max Retry Count | Int | 3 | Default retry attempts for failed sends. |
+
+### Gateway Client & Sync
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| Webhook URL | Data | — | Public URL the gateway POSTs webhooks to. Empty = auto-detect the site's webhook endpoint. |
+| Use JWT Authentication | Check | 0 | Issue scoped JWT tokens via `POST /auth/token` instead of Basic auth. Falls back to Basic if the server rejects the token request. |
+| JWT Token TTL (seconds) | Int | 3600 | Token lifetime requested from the gateway. |
+| Enable Inbox Sync | Check | 0 | Hourly backfill of the device inbox into SMS Queue (status Received). |
+| Enable Delivery Status Sync | Check | 1 | Hourly reconciliation of sent messages via the gateway when webhook reports are missing. |
+| Status Sync Age (minutes) | Int | 30 | Only poll messages sent more than this many minutes ago. |
 
 ### Routing & Rate Limiting
 
@@ -68,6 +79,8 @@ Each Android phone or HTTP SMS API endpoint is a separate Device record.
 | SIM Number | Select | No | SIM slot 1 or 2. |
 | Priority | Int | No | Lower = higher priority. |
 | Active | Check | Yes | Enable/disable device. |
+| Webhook Callback URL | Data | No | Overrides the webhook URL used for this device's self-registered webhooks. |
+| Webhook Registrations | Code (JSON) | No | Gateway webhook ids provisioned for this device (auto-managed, read-only). |
 
 ### Status (Read-only)
 
@@ -96,6 +109,7 @@ Click **Connect Device** in the form to auto-fetch device info from the gateway:
 - Queries `GET {server_url}/api/mobile/v1/device` for device details (with Basic Auth)
 - Queries `GET {server_url}/health` for online status
 - Auto-fills: `device_id`, `device_model`, `carrier_name`, `sim_phone_number`, `app_version`, `battery_level`
+- **Automatically registers all gateway webhooks** for the device (see `register_device_webhooks`), so no manual app-side webhook setup is required.
 
 ### Send Test SMS Button
 
@@ -211,7 +225,18 @@ return doc.mode_of_payment == "Bank Transfer"
 
 ## Webhook Configuration
 
-### In SMS Gateway Server (config.yml)
+### Automatic Self-Registration (recommended)
+
+SMS Relay provisions webhooks itself against the gateway's 3rd-party API. On **Connect Device** (or by calling `register_device_webhooks` / `reconcile_webhooks`), it registers every supported event:
+
+- `POST /webhooks` for each event (`sms:delivered`, `sms:failed`, `sms:sent`, `sms:cancelled`, `sms:received`, `sms:data-received`, `mms:received`, `mms:downloaded`, `app:started`, `system:ping`)
+- Registrations are stored on the SMS Device (`Webhook Registrations`) and kept up to date by `reconcile_webhooks` (stray/mismatched URLs are deleted).
+
+This replaces the manual `config.yml` / app-side webhook setup below.
+
+### Manual (In SMS Gateway Server config.yml)
+
+Only needed when running without self-registration (e.g. the server does not expose the webhook API):
 
 ```yaml
 server:
@@ -279,3 +304,4 @@ phone,name
 - Opt-out list cached for 600 seconds
 - Round-robin counter cached per-cycle
 - Notification map cached in `sms_notification_map` key
+- JWT access tokens cached per device (`sms_relay_jwt_{device}`) and reused until near expiry

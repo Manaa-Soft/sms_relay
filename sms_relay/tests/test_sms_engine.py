@@ -170,7 +170,10 @@ class TestRenderTemplate(SMSRelayTestCase):
 class TestSendAndroidGateway(SMSRelayTestCase):
     """Test Android gateway dispatch with mocking."""
 
-    @patch("sms_relay.core.sms_engine.requests.post")
+    def _get_device(self):
+        return frappe.get_doc("SMS Device", "Test Phone")
+
+    @patch("sms_relay.gateway.client.requests.post")
     def test_successful_send(self, mock_post):
         mock_resp = MagicMock()
         mock_resp.status_code = 202
@@ -178,12 +181,11 @@ class TestSendAndroidGateway(SMSRelayTestCase):
         mock_resp.json.return_value = {"id": "msg-001", "requestId": "req-001"}
         mock_post.return_value = mock_resp
 
-        device = frappe.get_doc("SMS Device", "Test Phone")
-        result = _send_android_gateway(device, "+15551234567", "Test message", "")
+        result = _send_android_gateway(self._get_device(), "+15551234567", "Test message", "")
         self.assertTrue(result["success"])
-        self.assertIn("message_id", result)
+        self.assertEqual(result["message_id"], "msg-001")
 
-    @patch("sms_relay.core.sms_engine.requests.post")
+    @patch("sms_relay.gateway.client.requests.post")
     def test_auth_failure(self, mock_post):
         mock_resp = MagicMock()
         mock_resp.status_code = 401
@@ -191,26 +193,23 @@ class TestSendAndroidGateway(SMSRelayTestCase):
         mock_resp.headers = {"content-type": "text/plain"}
         mock_post.return_value = mock_resp
 
-        device = frappe.get_doc("SMS Device", "Test Phone")
-        result = _send_android_gateway(device, "+15551234567", "Test message", "")
+        result = _send_android_gateway(self._get_device(), "+15551234567", "Test message", "")
         self.assertFalse(result["success"])
         self.assertIn("401", result["error"])
 
-    @patch("sms_relay.core.sms_engine.requests.post")
+    @patch("sms_relay.gateway.client.requests.post")
     def test_connection_error(self, mock_post):
         import requests
         mock_post.side_effect = requests.exceptions.ConnectionError("Connection refused")
 
-        device = frappe.get_doc("SMS Device", "Test Phone")
-        result = _send_android_gateway(device, "+15551234567", "Test message", "")
+        result = _send_android_gateway(self._get_device(), "+15551234567", "Test message", "")
         self.assertFalse(result["success"])
-        self.assertIn("Connection refused", result["error"])
+        self.assertIn("Connection error", result["error"])
 
     def test_no_server_url(self):
         frappe.db.set_value("SMS Device", "Test Phone", "server_url", "")
         frappe.db.commit()
-        device = frappe.get_doc("SMS Device", "Test Phone")
-        result = _send_android_gateway(device, "+15551234567", "Test message", "")
+        result = _send_android_gateway(self._get_device(), "+15551234567", "Test message", "")
         self.assertFalse(result["success"])
         self.assertIn("No server URL", result["error"])
 
@@ -220,18 +219,71 @@ class TestSendAndroidGateway(SMSRelayTestCase):
             "username": "",
         })
         frappe.db.commit()
-        device = frappe.get_doc("SMS Device", "Test Phone")
-        result = _send_android_gateway(device, "+15551234567", "Test message", "")
+        result = _send_android_gateway(self._get_device(), "+15551234567", "Test message", "")
         self.assertFalse(result["success"])
         self.assertIn("No credentials", result["error"])
 
-    @patch("sms_relay.core.sms_engine.requests.post")
+    @patch("sms_relay.gateway.client.requests.post")
     def test_idempotency_skips_duplicate(self, mock_post):
         _log_sms("+15551234567", "Test", "Sent", message_id="idem-123")
         queue = _enqueue_sms("+15551234567", "Test", message_id="idem-123")
         frappe.db.commit()
 
-        device = frappe.get_doc("SMS Device", "Test Phone")
-        result = _send_android_gateway(device, "+15551234567", "Test message", "", queue_doc=queue)
+        result = _send_android_gateway(self._get_device(), "+15551234567", "Test message", "", queue_doc=queue)
         self.assertTrue(result["success"])
+        self.assertEqual(result["message_id"], "idem-123")
         mock_post.assert_not_called()
+
+    @patch("sms_relay.gateway.client.requests.post")
+    def test_payload_includes_id_schedule_and_valid_until(self, mock_post):
+        mock_resp = MagicMock()
+        mock_resp.status_code = 202
+        mock_resp.headers = {"content-type": "application/json"}
+        mock_resp.json.return_value = {"id": "m-1"}
+        mock_post.return_value = mock_resp
+
+        from frappe.utils import add_to_date, now_datetime
+        schedule = add_to_date(now_datetime(), minutes=30)
+        result = _send_android_gateway(
+            self._get_device(), "+15551234567", "Hello", "",
+            message_id="m-1", ttl_seconds=120, schedule_at=schedule,
+        )
+        self.assertTrue(result["success"])
+        payload = mock_post.call_args.kwargs["json"]
+        self.assertEqual(payload["id"], "m-1")
+        self.assertEqual(payload["textMessage"], {"text": "Hello"})
+        self.assertEqual(payload["phoneNumbers"], ["+15551234567"])
+        self.assertIn("scheduleAt", payload)
+        self.assertIn("validUntil", payload)
+
+    @patch("sms_relay.gateway.client.requests.post")
+    def test_payload_sends_data_message(self, mock_post):
+        mock_resp = MagicMock()
+        mock_resp.status_code = 202
+        mock_resp.headers = {"content-type": "application/json"}
+        mock_resp.json.return_value = {"id": "m-2"}
+        mock_post.return_value = mock_resp
+
+        result = _send_android_gateway(
+            self._get_device(), "+15551234567", "Hello", "",
+            message_id="m-2", data_payload="aGVsbG8=", data_port=9200,
+        )
+        self.assertTrue(result["success"])
+        payload = mock_post.call_args.kwargs["json"]
+        self.assertEqual(payload["dataMessage"], {"data": "aGVsbG8=", "port": 9200})
+        self.assertNotIn("textMessage", payload)
+
+    @patch("sms_relay.gateway.client.requests.post")
+    def test_send_batch_recipients(self, mock_post):
+        mock_resp = MagicMock()
+        mock_resp.status_code = 202
+        mock_resp.headers = {"content-type": "application/json"}
+        mock_resp.json.return_value = {"id": "m-3"}
+        mock_post.return_value = mock_resp
+
+        result = _send_android_gateway(
+            self._get_device(), ["+15551234567", "+15557654321"], "Hello", "", message_id="m-3",
+        )
+        self.assertTrue(result["success"])
+        payload = mock_post.call_args.kwargs["json"]
+        self.assertEqual(payload["phoneNumbers"], ["+15551234567", "+15557654321"])

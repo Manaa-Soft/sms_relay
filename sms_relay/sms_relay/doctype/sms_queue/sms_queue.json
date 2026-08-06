@@ -160,6 +160,14 @@
     "read_only": 1
    },
    {
+    "fieldname": "delivery_status",
+    "fieldtype": "Select",
+    "label": "Delivery Status",
+    "options": "Pending\nSent\nDelivered\nFailed\nExpired",
+    "default": "Pending",
+    "in_standard_filter": 1
+   },
+   {
     "fieldname": "priority_tier",
     "fieldtype": "Select",
     "label": "Priority Tier",
@@ -168,14 +176,37 @@
     "in_list_view": 1,
     "in_standard_filter": 1
    },
-   {
-    "fieldname": "target_sim",
-    "fieldtype": "Select",
-    "label": "Target SIM",
-    "options": "Auto\n1\n2",
-    "default": "Auto"
-   }
-  ],
+    {
+     "fieldname": "target_sim",
+     "fieldtype": "Select",
+     "label": "Target SIM",
+     "options": "Auto\n1\n2",
+     "default": "Auto"
+    },
+    {
+     "fieldname": "section_data",
+     "fieldtype": "Section Break",
+     "label": "Data SMS / Inbox"
+    },
+    {
+     "fieldname": "data_payload",
+     "fieldtype": "Code",
+     "label": "Data SMS Payload (Base64)",
+     "description": "When set, sends a binary/data SMS instead of text."
+    },
+    {
+     "fieldname": "data_port",
+     "fieldtype": "Int",
+     "label": "Data SMS Port",
+     "description": "Destination port for the data message (0-65535)."
+    },
+    {
+     "fieldname": "inbox_message_id",
+     "fieldtype": "Data",
+     "label": "Inbox Message ID",
+     "description": "Gateway inbox message id (dedupe for inbox backfill)."
+    }
+   ],
  "permissions": [
   {
    "role": "System Manager",

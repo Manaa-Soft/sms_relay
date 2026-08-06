@@ -200,13 +200,21 @@
      "fieldname": "column_break_auth",
      "fieldtype": "Column Break"
     },
-    {
-     "fieldname": "webhook_callback_url",
-     "fieldtype": "Data",
-     "label": "Webhook Callback URL",
-     "options": "URL"
-    }
-  ],
+     {
+      "fieldname": "webhook_callback_url",
+      "fieldtype": "Data",
+      "label": "Webhook Callback URL",
+      "options": "URL"
+     },
+     {
+      "fieldname": "webhook_registrations",
+      "fieldtype": "Code",
+      "label": "Webhook Registrations",
+      "options": "JSON",
+      "read_only": 1,
+      "description": "Gateway webhook ids provisioned for this device (auto-managed)."
+     }
+   ],
  "permissions": [
   {
    "role": "System Manager",

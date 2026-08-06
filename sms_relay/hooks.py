@@ -51,6 +51,8 @@ scheduler_events = {
     ],
     "hourly": [
         "sms_relay.tasks.check_device_health",
+        "sms_relay.tasks.sync_delivery_status",
+        "sms_relay.tasks.sync_device_inbox",
         "sms_relay.utils.trigger_sms_notifications_hourly",
     ],
     "daily": [

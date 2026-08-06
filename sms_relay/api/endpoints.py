@@ -105,12 +105,20 @@ def connect_device(device_name=None):
     frappe.db.commit()
     result["success"] = updates.get("is_online", 0) == 1
     result["updates"] = updates
+
+    # Self-register webhooks so no manual app-side setup is required.
+    try:
+        from sms_relay.gateway.webhooks import provision_webhooks
+        result["webhooks"] = provision_webhooks(device).get("webhooks", [])
+    except Exception:
+        result["webhooks"] = []
     return result
 
 
 @frappe.whitelist()
 def send_sms_now(recipient=None, message=None, template=None, device=None, sim=None,
-                 message_id=None, ttl_seconds=None, valid_until=None, schedule_at=None):
+                 message_id=None, ttl_seconds=None, valid_until=None, schedule_at=None,
+                 data_payload=None, data_port=None):
     if not recipient:
         frappe.throw(_("Recipient is required"))
     if not message and not template:
@@ -137,7 +145,8 @@ def send_sms_now(recipient=None, message=None, template=None, device=None, sim=N
 
     from sms_relay.core.sms_engine import send_sms
     send_sms(phone_list, message, sender="", message_id=message_id,
-             ttl_seconds=ttl_seconds, valid_until=valid_until, schedule_at=schedule_at)
+             ttl_seconds=ttl_seconds, valid_until=valid_until, schedule_at=schedule_at,
+             data_payload=data_payload, data_port=data_port)
     return {"status": "sent", "recipients": phone_list, "message_length": len(message)}
 
 
@@ -450,3 +459,65 @@ def get_structured_health():
         "total_devices": len(checks),
         "online_devices": sum(1 for c in checks if c["is_online"]),
     }
+
+
+@frappe.whitelist()
+def register_device_webhooks(device_name=None, reconcile=0):
+    """Provision (or reconcile) every gateway webhook event for a device."""
+    if not device_name:
+        frappe.throw(_("Device name is required"))
+    device = frappe.get_doc("SMS Device", device_name)
+    from sms_relay.gateway.webhooks import provision_webhooks, reconcile_webhooks
+    if cint(reconcile):
+        return reconcile_webhooks(device)
+    return provision_webhooks(device)
+
+
+@frappe.whitelist()
+def get_webhook_registrations(device_name=None):
+    """Return the webhook registrations stored for a device."""
+    if not device_name:
+        frappe.throw(_("Device name is required"))
+    device = frappe.get_doc("SMS Device", device_name)
+    import json as _json
+    raw = device.get("webhook_registrations") or ""
+    try:
+        return _json.loads(raw) if raw else []
+    except (ValueError, TypeError):
+        return []
+
+
+@frappe.whitelist()
+def refresh_device_inbox(device_name=None, limit=100):
+    """Ask the device to rescan its inbox and import messages into SMS Queue."""
+    if not device_name:
+        frappe.throw(_("Device name is required"))
+    device = frappe.get_doc("SMS Device", device_name)
+    from sms_relay.gateway.inbox import refresh_device_inbox as _refresh
+    return _refresh(device, limit=cint(limit))
+
+
+@frappe.whitelist()
+def get_message_status(device_name=None, gateway_message_id=None):
+    """Fetch the gateway's current state for a sent message."""
+    if not device_name:
+        frappe.throw(_("Device name is required"))
+    if not gateway_message_id:
+        frappe.throw(_("Gateway message ID is required"))
+    device = frappe.get_doc("SMS Device", device_name)
+    from sms_relay.gateway.status import get_message_status as _get_status
+    data = _get_status(device, gateway_message_id)
+    if not data:
+        return {"success": False, "error": "No status returned by the gateway"}
+    return {"success": True, "message": data}
+
+
+@frappe.whitelist()
+def get_device_logs(device_name=None, limit=100):
+    """Fetch recent logs from the gateway server for a device."""
+    if not device_name:
+        frappe.throw(_("Device name is required"))
+    device = frappe.get_doc("SMS Device", device_name)
+    from sms_relay.gateway.client import GatewayClient
+    client = GatewayClient(device)
+    return {"success": True, "logs": client.get_logs(limit=cint(limit))}

@@ -344,3 +344,34 @@ def process_bulk_messages():
             process_bulk_job(bulk.name)
         except Exception:
             frappe.log_error(title="Bulk SMS Processing: {}".format(bulk.name))
+
+
+def sync_delivery_status():
+    """Reconcile delivery status of sent messages via the gateway API when
+    webhook reports are missing or delayed."""
+    try:
+        from sms_relay.gateway.status import sync_delivery_status as _sync_status
+        return _sync_status()
+    except Exception:
+        frappe.log_error(title="SMS Delivery Status Sync")
+        return {"status": "error"}
+
+
+def sync_device_inbox():
+    """Backfill incoming SMS from device inboxes (opt-in)."""
+    settings = frappe.get_single("SMS Gateway Settings")
+    if not cint(settings.get("inbox_sync_enabled")):
+        return {"status": "disabled"}
+    devices = frappe.get_all(
+        "SMS Device",
+        filters={"is_active": 1, "gateway_type": "Android SMS Gateway"},
+        fields=["name"],
+    )
+    for device_row in devices:
+        try:
+            from sms_relay.gateway.inbox import sync_device_inbox as _sync_inbox
+            device = frappe.get_doc("SMS Device", device_row.name)
+            _sync_inbox(device)
+        except Exception:
+            frappe.log_error(title="SMS Inbox Sync: {}".format(device_row.name))
+    return {"status": "ok"}

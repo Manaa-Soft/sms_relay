@@ -11,11 +11,15 @@ from sms_relay.core.sms_utils import (
     validate_phone_list,
 )
 
-def send_sms(receiver_list, msg, sender="", message_id=None, ttl_seconds=None, valid_until=None, schedule_at=None, **kwargs):
+def send_sms(receiver_list, msg, sender="", message_id=None, ttl_seconds=None, valid_until=None,
+             schedule_at=None, data_payload=None, data_port=None, **kwargs):
     settings = get_relay_settings()
     if not sender:
         sender = settings.get("sender_name") or ""
 
+    # Group receivers by the device they will be routed through so one gateway
+    # request can carry multiple recipients (the gateway accepts a list).
+    device_groups = {}
     for receiver in receiver_list:
         phone = clean_phone(receiver)
         if not phone:
@@ -27,15 +31,26 @@ def send_sms(receiver_list, msg, sender="", message_id=None, ttl_seconds=None, v
         if not device:
             _log_sms(phone, msg, "Failed", error="No SMS device available")
             continue
-        if not _throttle_check(device):
-            _log_sms(phone, msg, "Failed", error="Rate limit exceeded for device {}".format(device))
+        device_groups.setdefault(device, []).append(phone)
+
+    for device_name, phones in device_groups.items():
+        if not _throttle_check(device_name):
+            for phone in phones:
+                _log_sms(phone, msg, "Failed", error="Rate limit exceeded for device {}".format(device_name))
             continue
-        result = _send_to_device(device, phone, msg, sender)
-        if result.get("success"):
-            _log_sms(phone, msg, "Sent", device_name=device, gateway_message_id=result.get("message_id"), message_id=message_id)
-        else:
-            _enqueue_sms(phone, msg, device, priority="Normal", message_id=message_id,
-                         ttl_seconds=ttl_seconds, valid_until=valid_until, scheduled_at=schedule_at)
+        result = _send_to_device(
+            device_name, phones, msg, sender, message_id=message_id,
+            ttl_seconds=ttl_seconds, valid_until=valid_until, schedule_at=schedule_at,
+            data_payload=data_payload, data_port=data_port,
+        )
+        for phone in phones:
+            if result.get("success"):
+                _log_sms(phone, msg, "Sent", device_name=device_name,
+                         gateway_message_id=result.get("message_id"), message_id=message_id)
+            else:
+                _enqueue_sms(phone, msg, device_name, priority="Normal", message_id=message_id,
+                             ttl_seconds=ttl_seconds, valid_until=valid_until,
+                             scheduled_at=schedule_at, data_payload=data_payload, data_port=data_port)
 
 def send_sms_override(recipient, message, sender=None, **kwargs):
     if isinstance(recipient, str):
@@ -115,10 +130,16 @@ def _throttle_check(device_name):
     )
     return recent_count < global_limit
 
-def _send_to_device(device_name, phone, message, sender="", queue_doc=None):
+def _send_to_device(device_name, phone, message, sender="", queue_doc=None,
+                    message_id=None, ttl_seconds=None, valid_until=None, schedule_at=None,
+                    data_payload=None, data_port=None):
     device = frappe.get_doc("SMS Device", device_name)
     if device.gateway_type == "Android SMS Gateway":
-        result = _send_android_gateway(device, phone, message, sender, queue_doc=queue_doc)
+        result = _send_android_gateway(
+            device, phone, message, sender, queue_doc=queue_doc,
+            message_id=message_id, ttl_seconds=ttl_seconds, valid_until=valid_until,
+            schedule_at=schedule_at, data_payload=data_payload, data_port=data_port,
+        )
     else:
         result = _send_custom_http(device, phone, message, sender)
 
@@ -134,50 +155,70 @@ def _send_to_device(device_name, phone, message, sender="", queue_doc=None):
 
     return result
 
-def _send_android_gateway(device, phone, message, sender, queue_doc=None):
+def _priority_for_queue(queue_doc):
+    if not queue_doc:
+        return None
+    priority_map = {"High": 100, "Normal": 0, "Low": -100}
+    return priority_map.get(queue_doc.priority_tier or "Normal", 0)
+
+def _send_android_gateway(device, phone, message, sender="", queue_doc=None,
+                          message_id=None, ttl_seconds=None, valid_until=None, schedule_at=None,
+                          data_payload=None, data_port=None):
     # Idempotency: skip if message_id already sent
-    if queue_doc and queue_doc.message_id:
+    effective_message_id = message_id or (queue_doc.message_id if queue_doc else None)
+    if effective_message_id:
         existing = frappe.db.exists("SMS Log", {
-            "message_id": queue_doc.message_id,
+            "message_id": effective_message_id,
             "status": "Sent"
         })
         if existing:
-            return {"success": True, "message_id": queue_doc.message_id}
+            return {"success": True, "message_id": effective_message_id}
 
     base_url = (device.server_url or "").rstrip("/")
     if not base_url:
         return {"success": False, "error": "No server URL configured on device"}
-    settings = get_relay_settings()
-    api_path = (settings.get("api_path") or "/api/3rdparty/v1/message").lstrip("/")
-    timeout = cint(settings.get("timeout")) or 30
-    url = "{}/{}".format(base_url, api_path)
-    payload = {
-        "textMessage": {"text": message},
-        "phoneNumbers": [phone],
-        "simNumber": cint(device.sim_number) if device.sim_number else 1,
-        "withDeliveryReport": True,
-    }
-    if device.device_id:
-        payload["deviceId"] = device.device_id
-    if queue_doc:
-        priority_map = {"High": 100, "Normal": 0, "Low": -100}
-        tier = queue_doc.priority_tier or "Normal"
-        payload["priority"] = priority_map.get(tier, 0)
-
     username = device.username or ""
-    password = device.get_password("password") or ""
     if not username:
         return {"success": False, "error": "No credentials: set username/password on SMS Device '{}'".format(device.name)}
 
-    auth = requests.auth.HTTPBasicAuth(username, password)
-    try:
-        resp = requests.post(url, json=payload, headers={"Content-Type": "application/json"}, auth=auth, timeout=timeout)
-        if resp.status_code in (200, 201, 202):
-            data = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
-            return {"success": True, "message_id": data.get("id") or data.get("messageId") or data.get("requestId")}
-        return {"success": False, "error": "HTTP {}: {}".format(resp.status_code, resp.text[:200])}
-    except requests.exceptions.RequestException as e:
-        return {"success": False, "error": str(e)[:200]}
+    # Queue-driven sends carry scheduling/expiry/data on the queue document.
+    if queue_doc:
+        schedule_at = schedule_at or queue_doc.scheduled_at
+        valid_until = valid_until or queue_doc.valid_until
+        ttl_seconds = ttl_seconds or queue_doc.ttl_seconds
+        data_payload = data_payload if data_payload is not None else queue_doc.data_payload
+        data_port = data_port if data_port is not None else queue_doc.data_port
+
+    # Resolve the validity window. The gateway rejects `validUntil` in the past
+    # and rejects sending both `ttl` and `validUntil`, so compute one absolute
+    # expiry from TTL when no explicit deadline exists.
+    if valid_until is None and ttl_seconds:
+        from frappe.utils import add_to_date
+        valid_until = add_to_date(now(), seconds=cint(ttl_seconds))
+
+    # Only forward a schedule date that is still in the future — the gateway
+    # throws on `scheduleAt` in the past.
+    if schedule_at:
+        from frappe.utils import now_datetime
+        if schedule_at <= now_datetime():
+            schedule_at = None
+
+    from sms_relay.gateway.client import GatewayClient
+    client = GatewayClient(device, base_url=base_url)
+    phones = [phone] if isinstance(phone, str) else phone
+    return client.send_message(
+        phone_numbers=phones,
+        text=message if data_payload is None else None,
+        data=data_payload,
+        port=data_port,
+        message_id=effective_message_id,
+        sim_number=cint(device.sim_number) if device.sim_number else None,
+        schedule_at=schedule_at,
+        valid_until=valid_until,
+        priority=_priority_for_queue(queue_doc),
+        with_delivery_report=True,
+        device_id=device.device_id or None,
+    )
 
 def _send_custom_http(device, phone, message, sender):
     base_url = (device.server_url or "").rstrip("/")

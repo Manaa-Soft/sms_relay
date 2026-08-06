@@ -148,12 +148,60 @@
    "fieldtype": "Check",
    "label": "Enable Incoming Webhooks"
   },
-  {
-   "fieldname": "webhook_secret",
-   "fieldtype": "Password",
-   "label": "Webhook HMAC Secret"
-  }
- ],
+   {
+    "fieldname": "webhook_secret",
+    "fieldtype": "Password",
+    "label": "Webhook HMAC Secret"
+   },
+   {
+    "fieldname": "section_gateway_client",
+    "fieldtype": "Section Break",
+    "label": "Gateway Client & Sync"
+   },
+   {
+    "fieldname": "webhook_url",
+    "fieldtype": "Data",
+    "label": "Webhook URL",
+    "options": "URL",
+    "description": "Public URL the gateway POSTs webhooks to. Leave empty to auto-detect the site's webhook endpoint."
+   },
+   {
+    "fieldname": "use_jwt_auth",
+    "fieldtype": "Check",
+    "label": "Use JWT Authentication",
+    "description": "Issue scoped JWT tokens via /auth/token instead of Basic auth. Falls back to Basic if unavailable."
+   },
+   {
+    "fieldname": "column_break_gateway_client",
+    "fieldtype": "Column Break"
+   },
+   {
+    "fieldname": "jwt_ttl",
+    "fieldtype": "Int",
+    "label": "JWT Token TTL (seconds)",
+    "default": 3600
+   },
+   {
+    "fieldname": "inbox_sync_enabled",
+    "fieldtype": "Check",
+    "label": "Enable Inbox Sync",
+    "description": "Hourly backfill of the device inbox into SMS Queue (Received)."
+   },
+   {
+    "fieldname": "status_sync_enabled",
+    "fieldtype": "Check",
+    "label": "Enable Delivery Status Sync",
+    "default": 1,
+    "description": "Reconcile delivery status of sent messages via the gateway when webhook reports are missing."
+   },
+   {
+    "fieldname": "status_sync_age_minutes",
+    "fieldtype": "Int",
+    "label": "Status Sync Age (minutes)",
+    "default": 30,
+    "description": "Only poll messages sent more than this many minutes ago."
+   }
+  ],
  "permissions": [
   {
    "role": "System Manager",
