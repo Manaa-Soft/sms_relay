@@ -107,20 +107,20 @@ def _seed_default_notifications():
     notifications = [
         {
             "notification_name": "Send Overdue Invoice Reminders",
-            "notification_type": "Scheduler Event",
+            "notification_type": "DocType Event",
             "reference_doctype": "Sales Invoice",
-            "event_frequency": "Daily",
-            "scheduler_data_source": "Overdue Invoices",
+            "doctype_event": "After Submit",
+            "field_name": "contact_mobile",
             "template": "Overdue Invoice Reminder",
             "template_type": "Jinja",
             "disabled": 0,
         },
         {
             "notification_name": "Send Payment Reminder",
-            "notification_type": "Scheduler Event",
+            "notification_type": "DocType Event",
             "reference_doctype": "Sales Invoice",
-            "event_frequency": "Daily",
-            "scheduler_data_source": "Overdue Invoices",
+            "doctype_event": "After Submit",
+            "field_name": "contact_mobile",
             "template": "Payment Reminder",
             "template_type": "Jinja",
             "disabled": 1,
@@ -184,7 +184,40 @@ def after_migrate():
     """
     _create_default_templates()
     _create_default_notifications()
+    _upgrade_seeded_notifications()
     _ensure_sms_relay_desktop_icon()
+
+
+def _upgrade_seeded_notifications():
+    """Convert legacy seeded overdue notifications to DocType Event.
+
+    Earlier seeds created "Send Overdue Invoice Reminders" and "Send Payment
+    Reminder" as daily Scheduler Events. Existing records are upgraded here to
+    a DocType Event (After Submit) with the doctype's phone field connected
+    (``contact_mobile``). Disabled and template choices are preserved.
+    """
+    names = ("Send Overdue Invoice Reminders", "Send Payment Reminder")
+    for name in names:
+        if not frappe.db.exists("SMS Notification", name):
+            continue
+        try:
+            doc = frappe.get_doc("SMS Notification", name)
+            needs_fix = (
+                doc.notification_type != "DocType Event"
+                or not doc.field_name
+                or doc.get("scheduler_data_source")
+            )
+            if not needs_fix:
+                continue
+            doc.notification_type = "DocType Event"
+            doc.doctype_event = "After Submit"
+            doc.field_name = "contact_mobile"
+            doc.scheduler_data_source = ""
+            doc.event_frequency = ""
+            doc.save(ignore_permissions=True)
+        except Exception as e:
+            frappe.log_error(f"Failed to upgrade notification {name}: {e}", "sms_relay.setup")
+    frappe.db.commit()
 
 
 def _ensure_sms_relay_desktop_icon():

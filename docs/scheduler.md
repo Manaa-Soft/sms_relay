@@ -161,18 +161,18 @@ Messages are also imported in real time via `sms:received` webhooks; the inbox s
 
 ## Send Overdue Invoice Reminders (seeded SMS Notification)
 
-**Frequency:** Daily (via `trigger_sms_notifications_daily`)
+**Trigger:** Sales Invoice → **After Submit** (DocType Event)
 
-**Purpose:** Sends overdue invoice payment reminder SMS. No longer a hardcoded job — it ships as a **seeded SMS Notification** + **SMS Templates**, created automatically on install/migrate, so it can be stopped (tick **Disabled**) or edited from the desk.
+**Purpose:** Sends an overdue invoice payment reminder SMS when a Sales Invoice is submitted. No hardcoded job — it ships as a **seeded SMS Notification** + **SMS Templates**, created automatically on install/migrate, so it can be stopped (tick **Disabled**) or edited from the desk.
 
 **What it does:**
-1. Runs the daily **Scheduler Event** notification **"Send Overdue Invoice Reminders"** (`scheduler_data_source = Overdue Invoices`)
-2. Fetches submitted Sales Invoices with outstanding > 0 and due_date < today (limit 50)
-3. For each invoice:
-   a. Gets customer phone from Contact chain (Customer `mobile_no`/`phone`, then linked Contact)
-   b. Picks the template by language: invoice or Customer `language` = Arabic → **"Overdue Invoice Reminder (Arabic)"**, otherwise → **"Overdue Invoice Reminder"**
-   c. Renders the Jinja template against the invoice and enqueues one SMS
-4. Disable the notification to stop the reminders; edit the templates to change the wording
+1. Fires when a Sales Invoice is submitted (`notification_type = DocType Event`, `doctype_event = After Submit`)
+2. Reads the recipient phone from the invoice's **`contact_mobile`** field (auto-filled from the customer's primary Contact)
+3. Picks the template by language: invoice or Customer `language` = Arabic → **"Overdue Invoice Reminder (Arabic)"**, otherwise → **"Overdue Invoice Reminder"**
+4. Renders the Jinja template against the invoice and enqueues one SMS
+5. Disable the notification to stop the reminders; edit the templates to change the wording
+
+> The legacy daily scan (Scheduler Event + `Overdue Invoices` data source) remains available in the doctype but is no longer used by the seeded records.
 
 **Seeded records** (idempotent, created by `after_install` / `after_migrate`):
 - SMS Template **"Overdue Invoice Reminder"** (EN) and **"Overdue Invoice Reminder (Arabic)"**
@@ -184,8 +184,8 @@ All default templates (Payment Reminder, Order Confirmation, Dispatch Notificati
 
 | Notification | Type | Trigger | Template | Phone field | Default |
 |---|---|---|---|---|---|
-| Send Overdue Invoice Reminders | Scheduler Event (Daily) | `Overdue Invoices` | Overdue Invoice Reminder | via Customer | **Enabled** |
-| Send Payment Reminder | Scheduler Event (Daily) | `Overdue Invoices` | Payment Reminder | via Customer | Disabled |
+| Send Overdue Invoice Reminders | DocType Event | Sales Invoice → After Submit | Overdue Invoice Reminder | `contact_mobile` | **Enabled** |
+| Send Payment Reminder | DocType Event | Sales Invoice → After Submit | Payment Reminder | `contact_mobile` | Disabled |
 | Send Order Confirmation | DocType Event | Sales Order → After Submit | Order Confirmation | `contact_mobile` | Disabled |
 | Send Dispatch Notification | DocType Event | Delivery Note → After Submit | Dispatch Notification | `contact_mobile` | Disabled |
 | Send Payment Link | DocType Event | Sales Invoice → After Submit | Payment Link | `contact_mobile` | Disabled |
@@ -194,7 +194,7 @@ All default templates (Payment Reminder, Order Confirmation, Dispatch Notificati
 >
 > **Language:** for DocType Event notifications the message is auto-localized — if the document (or its Customer) has an Arabic `language`, the `"(Arabic)"` template variant is used when it exists.
 >
-> **Duplicates:** "Send Overdue Invoice Reminders" and "Send Payment Reminder" run the same daily scan with different wording — enable only one to avoid duplicate SMS.
+> **Upgrade:** existing installs that seeded the two reminder notifications as daily Scheduler Events are auto-converted to DocType Event (After Submit) with `contact_mobile` on the next `bench migrate`; your Disabled/template choices are preserved.
 
 ---
 
