@@ -178,6 +178,8 @@ Messages are also imported in real time via `sms:received` webhooks; the inbox s
 - SMS Template **"Overdue Invoice Reminder"** (EN) and **"Overdue Invoice Reminder (Arabic)"**
 - SMS Notification **"Send Overdue Invoice Reminders"** (Scheduler Event, Daily, active by default)
 
+All default templates (Payment Reminder, Order Confirmation, Dispatch Notification, Payment Link, Overdue Invoice Reminder) also ship an **"(Arabic)"** variant, auto-selected for Arabic-language recipients.
+
 ---
 
 ## retry_failed_sms

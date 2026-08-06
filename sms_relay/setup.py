@@ -65,6 +65,30 @@ def _seed_default_templates():
             "language": ar,
             "message_template": "عزيزي {{ doc.customer }}، تذكير: الفاتورة {{ doc.name }} متأخرة السداد (تاريخ الاستحقاق {{ frappe.utils.formatdate(doc.due_date) }}). المبلغ المستحق: {{ frappe.utils.fmt_money(doc.outstanding_amount) }}. يرجى الدفع في أقرب وقت.",
         },
+        {
+            "template_name": "Payment Reminder (Arabic)",
+            "category": "UTILITY",
+            "language": ar,
+            "message_template": "عزيزي {{ doc.customer }}، فاتورتك {{ doc.name }} بمبلغ {{ frappe.utils.fmt_money(doc.outstanding_amount) }} متأخرة السداد. يرجى الدفع في أقرب وقت ممكن.",
+        },
+        {
+            "template_name": "Order Confirmation (Arabic)",
+            "category": "TRANSACTIONAL",
+            "language": ar,
+            "message_template": "شكراً لطلبك {{ doc.name }}. الإجمالي: {{ frappe.utils.fmt_money(doc.grand_total) }}. سنقوم بمعالجة طلبك قريباً.",
+        },
+        {
+            "template_name": "Dispatch Notification (Arabic)",
+            "category": "TRANSACTIONAL",
+            "language": ar,
+            "message_template": "تم شحن طلبك {{ doc.name }}. التسليم المتوقع: {{ doc.delivery_date }}. سيتم مشاركة رقم التتبع قريباً.",
+        },
+        {
+            "template_name": "Payment Link (Arabic)",
+            "category": "TRANSACTIONAL",
+            "language": ar,
+            "message_template": "عزيزي {{ doc.customer }}، ادفع فاتورتك {{ doc.name }} ({{ frappe.utils.fmt_money(doc.grand_total) }}) عبر هذا الرابط: {{ doc.payment_url }}",
+        },
     ]
     for t in templates:
         if not frappe.db.exists("SMS Template", t["template_name"]):
