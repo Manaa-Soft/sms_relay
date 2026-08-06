@@ -1,5 +1,11 @@
 import frappe
 
+_OVERDUE_CONDITION = (
+    "(doc.outstanding_amount or 0) > 0 "
+    "and doc.due_date "
+    "and frappe.utils.getdate(doc.due_date) < frappe.utils.getdate()"
+)
+
 def after_install():
     _create_default_gateway_settings()
     _create_default_templates()
@@ -113,6 +119,7 @@ def _seed_default_notifications():
             "field_name": "contact_mobile",
             "template": "Overdue Invoice Reminder",
             "template_type": "Jinja",
+            "condition": _OVERDUE_CONDITION,
             "disabled": 0,
         },
         {
@@ -123,6 +130,7 @@ def _seed_default_notifications():
             "field_name": "contact_mobile",
             "template": "Payment Reminder",
             "template_type": "Jinja",
+            "condition": _OVERDUE_CONDITION,
             "disabled": 1,
         },
         {
@@ -194,7 +202,9 @@ def _upgrade_seeded_notifications():
     Earlier seeds created "Send Overdue Invoice Reminders" and "Send Payment
     Reminder" as daily Scheduler Events. Existing records are upgraded here to
     a DocType Event (After Submit) with the doctype's phone field connected
-    (``contact_mobile``). Disabled and template choices are preserved.
+    (``contact_mobile``). Disabled and template choices are preserved, and the
+    default overdue Condition is filled only when the field is blank (never
+    overwriting a user-authored expression).
     """
     names = ("Send Overdue Invoice Reminders", "Send Payment Reminder")
     for name in names:
@@ -206,6 +216,7 @@ def _upgrade_seeded_notifications():
                 doc.notification_type != "DocType Event"
                 or not doc.field_name
                 or doc.get("scheduler_data_source")
+                or not doc.condition
             )
             if not needs_fix:
                 continue
@@ -214,6 +225,8 @@ def _upgrade_seeded_notifications():
             doc.field_name = "contact_mobile"
             doc.scheduler_data_source = ""
             doc.event_frequency = ""
+            if not doc.condition:
+                doc.condition = _OVERDUE_CONDITION
             doc.save(ignore_permissions=True)
         except Exception as e:
             frappe.log_error(f"Failed to upgrade notification {name}: {e}", "sms_relay.setup")

@@ -167,16 +167,21 @@ Messages are also imported in real time via `sms:received` webhooks; the inbox s
 
 **What it does:**
 1. Fires when a Sales Invoice is submitted (`notification_type = DocType Event`, `doctype_event = After Submit`)
-2. Reads the recipient phone from the invoice's **`contact_mobile`** field (auto-filled from the customer's primary Contact)
-3. Picks the template by language: invoice or Customer `language` = Arabic → **"Overdue Invoice Reminder (Arabic)"**, otherwise → **"Overdue Invoice Reminder"**
-4. Renders the Jinja template against the invoice and enqueues one SMS
-5. Disable the notification to stop the reminders; edit the templates to change the wording
+2. Evaluates the **Condition (Python Expression)**: the default gate sends only when the invoice has an unpaid balance **and** is past its due date
+   ```python
+   (doc.outstanding_amount or 0) > 0 and doc.due_date and frappe.utils.getdate(doc.due_date) < frappe.utils.getdate()
+   ```
+   Fully paid or not-yet-due invoices are skipped.
+3. Reads the recipient phone from the invoice's **`contact_mobile`** field (auto-filled from the customer's primary Contact)
+4. Picks the template by language: invoice or Customer `language` = Arabic → **"Overdue Invoice Reminder (Arabic)"**, otherwise → **"Overdue Invoice Reminder"**
+5. Renders the Jinja template against the invoice and enqueues one SMS
+6. Disable the notification to stop the reminders; edit the templates or the condition to change behaviour
 
 > The legacy daily scan (Scheduler Event + `Overdue Invoices` data source) remains available in the doctype but is no longer used by the seeded records.
 
 **Seeded records** (idempotent, created by `after_install` / `after_migrate`):
 - SMS Template **"Overdue Invoice Reminder"** (EN) and **"Overdue Invoice Reminder (Arabic)"**
-- SMS Notification **"Send Overdue Invoice Reminders"** (Scheduler Event, Daily, active by default)
+- SMS Notification **"Send Overdue Invoice Reminders"** (DocType Event, Sales Invoice → After Submit, `contact_mobile`, overdue Condition, active by default)
 
 All default templates (Payment Reminder, Order Confirmation, Dispatch Notification, Payment Link, Overdue Invoice Reminder) also ship an **"(Arabic)"** variant, auto-selected for Arabic-language recipients.
 
@@ -192,9 +197,11 @@ All default templates (Payment Reminder, Order Confirmation, Dispatch Notificati
 
 > **Phone Number Field:** Sales Order, Delivery Note and Sales Invoice all expose ERPNext's standard `contact_mobile` field (auto-filled from the customer's primary Contact). A notification sends only when that field is populated on the document.
 >
+> **Condition:** "Send Overdue Invoice Reminders" and "Send Payment Reminder" ship with the overdue gate above (unpaid balance + past due date) so they never fire on freshly submitted, on-time, or fully paid invoices. The upgrade fills the Condition only when the field is blank — your own expressions are never overwritten.
+>
 > **Language:** for DocType Event notifications the message is auto-localized — if the document (or its Customer) has an Arabic `language`, the `"(Arabic)"` template variant is used when it exists.
 >
-> **Upgrade:** existing installs that seeded the two reminder notifications as daily Scheduler Events are auto-converted to DocType Event (After Submit) with `contact_mobile` on the next `bench migrate`; your Disabled/template choices are preserved.
+> **Upgrade:** existing installs that seeded the two reminder notifications as daily Scheduler Events are auto-converted to DocType Event (After Submit) with `contact_mobile` and the default Condition on the next `bench migrate`; your Disabled/template choices are preserved.
 
 ---
 

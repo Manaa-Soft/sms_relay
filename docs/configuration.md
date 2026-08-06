@@ -179,7 +179,7 @@ Configure automatic SMS triggers on ERPNext documents.
 | Template | Link: SMS Template | Yes | Linked SMS Template. |
 | Template Type | Select | Yes | **Jinja** (`{{ doc.field }}` syntax) or **Parameter** (`{{1}}`, `{{2}}` mapped via Fields table). |
 | Message Template | Code (HTML) | Yes | Template body (auto-loaded from linked template). |
-| Condition | Code (Python) | No | `return True` to send. |
+| Condition | Code (Python) | No | Expression that must evaluate to True to send; `doc` is the triggering document (a `_dict`, so `doc.field` works). Example: `(doc.grand_total or 0) > 1000`. Plain expression — do not prefix with `return`. |
 | Event Frequency | Select | No | How often to trigger (for scheduled notifications). |
 | Scheduler Data Source | Select | No | `Overdue Invoices`: send one message per overdue Sales Invoice (submitted, outstanding balance past due date). Template is chosen per recipient from the invoice/Customer language (Arabic → "…(Arabic)" variant). |
 | Fields | Table: SMS Message Field | No | Maps `{{1}}`, `{{2}}` placeholders to document fields (Parameter mode only). |
@@ -209,16 +209,23 @@ You can mix both syntaxes in **Jinja** mode — Jinja2 `{{ doc.field }}` and pos
 
 ### Condition Examples
 
+The Condition is a plain Python expression (evaluated with `frappe.safe_eval`), **not** a `return` statement. `doc` is the triggering document — attribute access works, and dates are real `date` objects (compare with `getdate`).
+
 ```python
 # Only send for invoices over 1000
-return doc.grand_total > 1000
+(doc.grand_total or 0) > 1000
 
 # Only send if customer has outstanding
-return doc.outstanding_amount > 0
+(doc.outstanding_amount or 0) > 0
 
 # Only send on specific payment method
-return doc.mode_of_payment == "Bank Transfer"
+doc.mode_of_payment == "Bank Transfer"
+
+# Only send for genuinely overdue invoices (seeded default for the two reminder notifications)
+(doc.outstanding_amount or 0) > 0 and doc.due_date and frappe.utils.getdate(doc.due_date) < frappe.utils.getdate()
 ```
+
+`frappe` and its helpers (`frappe.utils.getdate`, `frappe.utils.nowdate`, …) are available in the expression. Empty Condition = always send (subject to the other rules).
 
 ### Phone Resolution Order
 

@@ -238,3 +238,82 @@ class TestDoctypeEventLocalization(SMSRelayTestCase):
         mock_enqueue.assert_called_once()
         self.assertEqual(mock_enqueue.call_args.kwargs["template"], "Order Confirmation")
         self.assertIn("Thank you", mock_enqueue.call_args.kwargs["message"])
+
+
+class TestConditionGating(SMSRelayTestCase):
+    """The DocType Event Condition (Python Expression) gates the send."""
+
+    CONDITION = (
+        "(doc.outstanding_amount or 0) > 0 "
+        "and doc.due_date "
+        "and frappe.utils.getdate(doc.due_date) < frappe.utils.getdate()"
+    )
+
+    def setUp(self):
+        super().setUp()
+        self._create_template()
+        self._create_notification()
+
+    def _create_template(self):
+        if not frappe.db.exists("SMS Template", "Overdue Invoice Reminder"):
+            tmpl = frappe.new_doc("SMS Template")
+            tmpl.template_name = "Overdue Invoice Reminder"
+            tmpl.category = "UTILITY"
+            tmpl.language = "en"
+            tmpl.message_template = "Dear {{ doc.customer }} - Invoice {{ doc.name }} is overdue."
+            tmpl.insert(ignore_permissions=True)
+
+    def _create_notification(self):
+        if not frappe.db.exists("SMS Notification", "Overdue Condition Test"):
+            n = frappe.new_doc("SMS Notification")
+            n.notification_name = "Overdue Condition Test"
+            n.notification_type = "DocType Event"
+            n.reference_doctype = "Sales Invoice"
+            n.doctype_event = "After Submit"
+            n.field_name = "contact_mobile"
+            n.template = "Overdue Invoice Reminder"
+            n.template_type = "Jinja"
+            n.condition = self.CONDITION
+            n.disabled = 0
+            n.insert(ignore_permissions=True)
+
+    def _invoice_doc(self, outstanding=10000.0, due_date="2026-07-10", contact_mobile="+967777715787"):
+        data = frappe._dict({
+            "doctype": "Sales Invoice",
+            "name": "ACC-SINV-2026-00033",
+            "customer": "Faissal Mannaa",
+            "due_date": due_date,
+            "outstanding_amount": outstanding,
+            "contact_mobile": contact_mobile,
+        })
+        data.as_dict = lambda: data
+        return data
+
+    @patch("sms_relay.core.sms_engine._enqueue_sms")
+    def test_sends_when_overdue(self, mock_enqueue):
+        notification = frappe.get_doc("SMS Notification", "Overdue Condition Test")
+        notification.send_template_message(self._invoice_doc())
+
+        mock_enqueue.assert_called_once()
+        self.assertEqual(mock_enqueue.call_args.kwargs["phone"], "+967777715787")
+
+    @patch("sms_relay.core.sms_engine._enqueue_sms")
+    def test_skips_when_fully_paid(self, mock_enqueue):
+        notification = frappe.get_doc("SMS Notification", "Overdue Condition Test")
+        notification.send_template_message(self._invoice_doc(outstanding=0.0))
+
+        mock_enqueue.assert_not_called()
+
+    @patch("sms_relay.core.sms_engine._enqueue_sms")
+    def test_skips_when_not_yet_due(self, mock_enqueue):
+        notification = frappe.get_doc("SMS Notification", "Overdue Condition Test")
+        notification.send_template_message(self._invoice_doc(due_date="2026-12-31"))
+
+        mock_enqueue.assert_not_called()
+
+    @patch("sms_relay.core.sms_engine._enqueue_sms")
+    def test_skips_when_no_due_date_without_error(self, mock_enqueue):
+        notification = frappe.get_doc("SMS Notification", "Overdue Condition Test")
+        notification.send_template_message(self._invoice_doc(due_date=None))
+
+        mock_enqueue.assert_not_called()

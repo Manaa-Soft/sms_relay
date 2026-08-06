@@ -299,7 +299,7 @@ Doc-triggered automated SMS rules with Jinja or Parameter templates.
 | template | Link: SMS Template | Linked SMS Template |
 | template_type | Select | **Jinja** or **Parameter** — controls how the template body is rendered |
 | message_template | Code (HTML) | Template body (auto-loaded from linked template) |
-| condition | Code (Python) | `return True` to send |
+| condition | Code (Python) | Expression that must evaluate to True to send; `doc` is the triggering document. Plain expression, no `return` prefix. Empty = always send |
 | event_frequency | Select | How often to trigger |
 | scheduler_data_source | Select | `Overdue Invoices` — send one message per overdue Sales Invoice (submitted, outstanding balance past due date); template selected per invoice/Customer language |
 | days_in_advance | Int | For scheduled: days before date field |

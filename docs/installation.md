@@ -162,7 +162,7 @@ Dear {{ doc.customer }}, your invoice {{ doc.name }} for {{ frappe.utils.fmt_mon
    - Field Name: customer_contact_person (or the field with phone)
    - Template: Select your SMS Template
    - Template Type: Jinja (or Parameter if using positional params)
-   - Condition: `return doc.outstanding_amount > 0`
+   - Condition: `(doc.outstanding_amount or 0) > 0`
 3. Save
 
 ## Step 7: Test

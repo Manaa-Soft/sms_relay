@@ -144,7 +144,7 @@
    "fieldtype": "Code",
    "label": "Condition (Python Expression)",
    "options": "Python",
-   "description": "Return True to send. Example: return doc.grand_total > 1000"
+    "description": "Expression that must evaluate to True to send. doc is the triggering document. Example: (doc.grand_total or 0) > 1000"
   },
   {
    "fieldname": "column_break_condition",

@@ -147,7 +147,7 @@ curl -X POST http://YOUR-FRAPPE-SITE/api/method/sms_relay.api.webhook_receiver.i
 1. Check SMS Notification `disabled` is unchecked
 2. Verify `doctype_event` matches your workflow (submit vs save)
 3. Verify `field_name` matches a field on the DocType
-4. Test condition: `return True` to always send
+4. Test condition: clear the Condition field (or use `1`) to always send
 5. Use "Preview Message" button in the form
 6. Check the linked SMS Template has a message_template body
 
