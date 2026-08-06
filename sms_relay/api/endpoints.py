@@ -53,7 +53,7 @@ def connect_device(device_name=None):
         return {"success": False, "error": "No server URL configured"}
     settings = get_relay_settings()
     headers, auth = _get_gateway_auth(settings, device)
-    updates = {"is_online": 0, "last_heartbeat": now()}
+    updates = {"is_online": 0, "last_heartbeat": now(), "is_active": 0}
     result = {"success": False}
 
     try:
@@ -67,6 +67,7 @@ def connect_device(device_name=None):
                 data = data[0]
             updates["is_online"] = 1
             updates["last_heartbeat"] = now()
+            updates["is_active"] = 1
             if data.get("id"):
                 updates["device_id"] = data["id"]
             if data.get("name"):

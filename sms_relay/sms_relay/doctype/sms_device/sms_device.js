@@ -23,20 +23,25 @@ frappe.ui.form.on('SMS Device', {
             frm.dashboard.set_headline(__('Carrier: {0} | SIM: {1}', [frm.doc.carrier_name, frm.doc.sim_phone_number || 'N/A']));
         }
 
+        frm.page.set_indicator(
+            frm.doc.is_active ? __('Active') : __('Inactive'),
+            frm.doc.is_active ? 'green' : 'gray'
+        );
+
         if (!frm.is_new() && frm.doc.server_url && frm.doc.username) {
-            frm.add_custom_button(__('Connect Device'), function() {
+            frm.add_custom_button(__('Check Device'), function() {
                 frappe.call({
                     method: 'sms_relay.api.endpoints.connect_device',
                     args: { device_name: frm.doc.name },
                     freeze: true,
-                    freeze_message: __('Connecting to device...'),
+                    freeze_message: __('Checking device...'),
                     callback: function(r) {
                         if (r.message && r.message.success) {
                             frappe.show_alert({message: __('Device connected!'), indicator: 'green'});
-                            frm.reload_doc();
                         } else {
                             frappe.show_alert({message: __('Connection failed: ' + (r.message?.error || 'Unknown')), indicator: 'red'});
                         }
+                        frm.reload_doc();
                     }
                 });
             }, __('Actions'));

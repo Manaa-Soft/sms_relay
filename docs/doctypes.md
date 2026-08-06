@@ -59,7 +59,7 @@ Represents a registered Android phone or custom HTTP SMS API endpoint.
 | password | Password | Gateway auth password (from phone registration) |
 | sim_number | Select | SIM slot 1 or 2 |
 | priority | Int | Lower = higher priority |
-| is_active | Check | Enable/disable device |
+| is_active | Check | Enable/disable device — also set automatically by **Check Device** / the hourly health check (Active on success, Inactive on failure) |
 
 #### Status (Read-only)
 | Field | Type | Description |
