@@ -120,16 +120,17 @@ frappe.get_all("SMS Bulk Message", filters={"status": ["in", ["Processing", "Dra
 ### Delivery receipts not updating status
 
 **Fixes:**
-1. Check `config.yml` has webhook URL configured
-2. URL: `http://YOUR-FRAPPE-SITE/api/method/sms_relay.api.webhook_receiver.incoming_webhook`
+1. Confirm webhooks were registered — run **Check Device** (or `register_device_webhooks`) and verify `GET /api/3rdparty/v1/webhooks` lists every event with your webhook URL
+2. The registered URL must be `https://.../api/method/sms_relay.api.webhook_receiver.incoming_webhook` (the gateway server rejects `http://` with `400 url must start with https://`; there is no `allow_http` option). Set it on **SMS Device → Webhook Callback URL** or **SMS Gateway Settings → Webhook URL**
 3. Test webhook manually:
 ```bash
-curl -X POST http://YOUR-FRAPPE-SITE/api/method/sms_relay.api.webhook_receiver.incoming_webhook \
+curl -X POST https://YOUR-FRAPPE-SITE/api/method/sms_relay.api.webhook_receiver.incoming_webhook \
   -H "Content-Type: application/json" \
   -d '{"event": "system:ping", "deviceId": "test"}'
 ```
-4. Check Webhook HMAC Secret matches between Frappe and server config
-5. Check firewall allows incoming connections
+4. Check Webhook HMAC Secret matches between Frappe and the app's signing key
+5. Check the gateway container trusts your TLS cert (private CA: set `SSL_CERT_FILE` in the gateway container)
+6. Check firewall allows incoming connections
 
 ---
 
@@ -219,16 +220,17 @@ curl -X POST http://YOUR-FRAPPE-SITE/api/method/sms_relay.api.webhook_receiver.i
 ### Webhook deliveries failing repeatedly
 
 **Causes:**
-1. Frappe site unreachable from webhook source
-2. Wrong webhook URL in server config.yml
-3. Firewall blocking incoming connections
+1. Registered webhook URL is `http://` — the gateway server hard-rejects it (`400 url must start with https://`; no `allow_http` option)
+2. Frappe site unreachable from the gateway server / TLS cert not trusted
+3. Wrong URL (auto-detected instead of your LAN https endpoint)
 4. HMAC secret mismatch
 
 **Fix:**
 1. Check `SMS Webhook Delivery` list for failed entries
-2. Verify webhook URL: `http://YOUR-FRAPPE-SITE/api/method/sms_relay.api.webhook_receiver.incoming_webhook`
-3. Test: `curl -X POST http://YOUR-FRAPPE-SITE/api/method/sms_relay.api.webhook_receiver.incoming_webhook -H "Content-Type: application/json" -d '{"event": "system:ping"}'`
-4. Check firewall allows incoming connections
+2. Set the webhook URL to `https://YOUR-FRAPPE-SITE/api/method/sms_relay.api.webhook_receiver.incoming_webhook` on **SMS Device → Webhook Callback URL** (or **SMS Gateway Settings → Webhook URL**), then re-run **Check Device**
+3. Test: `curl -X POST https://YOUR-FRAPPE-SITE/api/method/sms_relay.api.webhook_receiver.incoming_webhook -H "Content-Type: application/json" -d '{"event": "system:ping"}'`
+4. Private CA: make the gateway container trust it via `SSL_CERT_FILE` (see the wiki [Webhook Delivery](https://github.com/Manaa-Soft/sms_relay/wiki/Webhook-Delivery))
+5. Check firewall allows incoming connections
 
 ---
 

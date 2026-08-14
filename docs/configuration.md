@@ -23,7 +23,7 @@ Singleton DocType — one record for the entire site.
 | Webhook URL | Data | — | Public URL the gateway POSTs webhooks to. Empty = auto-detect the site's webhook endpoint. |
 | Use JWT Authentication | Check | 0 | Issue scoped JWT tokens via `POST /auth/token` instead of Basic auth. Falls back to Basic if the server rejects the token request. |
 | JWT Token TTL (seconds) | Int | 3600 | Token lifetime requested from the gateway. |
-| Enable Inbox Sync | Check | 0 | Hourly backfill of the device inbox into SMS Queue (status Received). |
+| Enable Inbox Sync | Check | 0 | Hourly backfill of the device inbox into SMS Queue (status Received). Note: the current gateway server returns `501 Not Implemented` for `GET /inbox`, so this does nothing on current server versions — webhooks are the working incoming path. |
 | Enable Delivery Status Sync | Check | 1 | Hourly reconciliation of sent messages via the gateway when webhook reports are missing. |
 | Status Sync Age (minutes) | Int | 30 | Only poll messages sent more than this many minutes ago. |
 
@@ -262,28 +262,14 @@ SMS Relay provisions webhooks itself against the gateway's 3rd-party API. On **C
 - `POST /webhooks` for each event (`sms:delivered`, `sms:failed`, `sms:sent`, `sms:cancelled`, `sms:received`, `sms:data-received`, `mms:received`, `mms:downloaded`, `app:started`, `system:ping`)
 - Registrations are stored on the SMS Device (`Webhook Registrations`) and kept up to date by `reconcile_webhooks` (stray/mismatched URLs are deleted).
 
-This replaces the manual `config.yml` / app-side webhook setup below.
+This replaces the legacy manual setup. **There is no `webhooks:` section in the gateway server's config.yml** (config keys are only `gateway`, `http`, `database`, `fcm`, `sse`, `messages`, `cache`, `pubsub`, `jwt`, `otp`) and no `allow_http` option — unknown YAML keys are silently ignored, so adding one does nothing.
 
-### Manual (In SMS Gateway Server config.yml)
+### Webhook URL requirements
 
-Only needed when running without self-registration (e.g. the server does not expose the webhook API):
-
-```yaml
-server:
-  webhooks:
-    - url: "http://YOUR-FRAPPE-SITE/api/method/sms_relay.api.webhook_receiver.incoming_webhook"
-      events:
-        - sms:delivered
-        - sms:failed
-        - sms:sent
-        - sms:cancelled
-        - sms:received
-        - sms:data-received
-        - mms:received
-        - mms:downloaded
-        - app:started
-        - system:ping
-```
+- The registered URL **must start with `https://`**. The gateway server rejects anything else with `400 Bad Request: url must start with https://`.
+- To control the URL on a private LAN, set **SMS Device → Webhook Callback URL** (per device) or **SMS Gateway Settings → Webhook URL** (global), e.g. `https://192.168.1.15/api/method/sms_relay.api.webhook_receiver.incoming_webhook`.
+- Fully offline operation (no internet) is possible: all three legs run on the LAN (Frappe registers webhooks → phone reports events to the server → the server relays to the https URL). Terminate TLS with nginx in front of Frappe and point the gateway container at your CA via `SSL_CERT_FILE`. See the [wiki: Webhook Delivery](https://github.com/Manaa-Soft/sms_relay/wiki/Webhook-Delivery).
+- Incoming SMS only arrives via webhook — the server's `GET /api/3rdparty/v1/inbox` returns `501 Not Implemented`, so there is no polling fallback.
 
 ### HMAC Signature Verification
 

@@ -129,8 +129,9 @@ sms_relay/sms_relay/
 
 ### Delivery Receipt
 
-1. Android phone sends delivery status to webhook URL (app posts directly, not via the gateway server)
-2. `webhook_receiver.incoming_webhook()` receives POST
+1. Android phone reports the event to the gateway server over the mobile API (bearer device token)
+2. The gateway **server relays** the event by POSTing the webhook envelope to the registered URL (the phone never posts to Frappe directly; in Private/Cloud mode the URL is registered by SMS Relay and **must start with `https://`**)
+3. `webhook_receiver.incoming_webhook()` receives POST
 3. HMAC signature verified if configured — accepts either `X-Webhook-Signature` (legacy, HMAC over raw body) or `X-Signature` + `X-Timestamp` (app scheme, HMAC over body + timestamp with 15-min freshness window)
 4. Envelope unwrapped — event fields read from `payload`, `deviceId` from the envelope
 5. Idempotency check via cache (keyed by the envelope's unique `id` when present)

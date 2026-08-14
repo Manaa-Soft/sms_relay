@@ -158,6 +158,10 @@ sms_relay registers jobs with the Frappe scheduler. These run automatically at t
 
 Messages are also imported in real time via `sms:received` webhooks; the inbox sweep is only a safety net.
 
+> **Note:** the current gateway server returns `501 Not Implemented` for
+> `GET /api/3rdparty/v1/inbox`, so on current server versions this job finds
+> nothing — webhooks are the only working path for incoming SMS.
+
 ---
 
 ## Send Overdue Invoice Reminders (seeded SMS Notification)

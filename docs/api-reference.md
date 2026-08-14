@@ -209,7 +209,7 @@ Return the webhook registrations stored for a device.
 
 ## refresh_device_inbox
 
-Ask the device to rescan its inbox (`POST /inbox/refresh`), then import messages into `SMS Queue` (status **Received**), deduplicated by the gateway inbox message id.
+Ask the device to rescan its inbox (`POST /inbox/refresh`), then import messages into `SMS Queue` (status **Received**), deduplicated by the gateway inbox message id. **Note:** the current gateway server returns `501 Not Implemented` for inbox endpoints, so this is a no-op on current server versions — use `sms:received` webhooks instead.
 
 **Path:** `sms_relay.api.endpoints.refresh_device_inbox`
 
@@ -610,7 +610,7 @@ Public endpoint for receiving delivery receipts and incoming SMS.
 
 ### Request Envelope
 
-The Android SMS Gateway **app** POSTs an envelope (webhooks are sent directly from the phone, not relayed by the server):
+In **Private/Cloud** mode the gateway **server relays** the event to the registered webhook URL (the phone reports events to the server over the mobile API; it does not post here directly). The webhook URL **must start with `https://`** — the gateway rejects `http://` with `400 url must start with https://`. The relayed envelope looks like:
 
 ```json
 {
