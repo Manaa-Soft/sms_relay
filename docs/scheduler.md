@@ -118,9 +118,10 @@ sms_relay registers jobs with the Frappe scheduler. These run automatically at t
 
 **What it does:**
 1. For each enabled device (`is_active = 1`):
-   a. GET request to `{server_url}/api/mobile/v1/device` with Basic Auth
+   a. GET request to the device endpoint with Basic Auth, trying each candidate URL in order until one returns `200`:
+      `{api_base}/devices` → `{server_url}/devices` → `{api_base}/device` → `{server_url}/device` → `{server_url}/api/mobile/v1/device`
    b. Update battery_level, signal_strength
-   c. If unreachable → set is_online = 0
+   c. If unreachable → set is_active = 0
 
 ---
 

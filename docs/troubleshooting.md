@@ -74,7 +74,7 @@ frappe.get_all("SMS Bulk Message", filters={"status": ["in", ["Processing", "Dra
 1. Open SMS Gateway app on phone → verify "Connected" status
 2. Check phone can reach the server (same LAN or correct port forwarding)
 3. Verify Server URL in SMS Device record matches the gateway server
-4. Click **Connect Device** to refresh device info
+4. Click **Check Device** to refresh device info
 5. Restart the Android app
 6. Check Docker logs: `docker logs sms-gateway`
 

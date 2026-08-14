@@ -61,7 +61,7 @@ ERPNext (Invoice/Payment/Delivery/PO)
 - **Async queue** — Priority tiers (High for OTP/Payment, Low for marketing)
 - **Data SMS / binary messages** — Send base64 payloads with a destination port
 - **JWT authentication** — Optional scoped access tokens (falls back to Basic)
-- **Webhook self-registration** — SMS Relay provisions all gateway webhooks automatically on Connect Device
+- **Webhook self-registration** — SMS Relay provisions all gateway webhooks automatically on Check Device
 - **SMS Opt Out** — Automatic STOP blacklist with cache invalidation
 - **Delivery tracking** — Webhook delivery receipts with HMAC-SHA256 verification + hourly status-polling fallback
 - **Inbox backfill** — Hourly sweep of the device inbox so missed messages are not lost
@@ -158,7 +158,7 @@ bench restart
 | Hourly/Daily Quota | Rate limits |
 | Active | Enable/disable |
 
-Click **Connect Device** to auto-fetch device info from the gateway — this also **registers all gateway webhooks automatically**, so no manual webhook setup in the app/server is required.
+Click **Check Device** to auto-fetch device info from the gateway (marks the device **Active** on success / **Inactive** on failure) — this also **registers all gateway webhooks automatically**, so no manual webhook setup in the app/server is required. The device endpoint is resolved automatically (3rd-party `/devices` → server `/device` → legacy `/api/mobile/v1/device`).
 
 ### 3. Create SMS Templates (Optional)
 
@@ -225,7 +225,7 @@ frappe.call({
 | DocType | Enhancements |
 |---|---|
 | SMS Gateway Settings | Routing strategy, rate limiting, webhook secret, failover, send intervals, per-device rate limits |
-| SMS Device | Server URL, username/password, SIM info, device model, carrier, battery, quotas, Connect Device / Send Test SMS buttons |
+| SMS Device | Server URL, username/password, SIM info, device model, carrier, battery, quotas, Check Device / Send Test SMS buttons |
 | SMS Template | Language, header/footer, character counter, positional param support |
 | SMS Log | Delivery status, delivery timestamp, channel, retry count, device_id, message_id, cancelled_at |
 | SMS Queue | Priority tiers, target SIM, retry counts, ttl_seconds, valid_until, message_id, cancelled_at |
@@ -313,7 +313,7 @@ Event fields (`sender`, `message`, `simNumber`, `reason`, `partsCount`, `simCard
 
 Supported events: `sms:delivered`, `sms:failed`, `sms:sent`, `sms:cancelled`, `sms:received`, `sms:data-received`, `mms:received`, `mms:downloaded`, `app:started`, `system:ping`
 
-**Automatic registration** — SMS Relay registers all of the above webhooks itself via `POST /webhooks` when you click **Connect Device** (or call `register_device_webhooks`). No manual app-side or `config.yml` setup is needed. Registrations are stored per device in `Webhook Registrations`; `reconcile_webhooks` deletes stray entries and re-provisions missing ones.
+**Automatic registration** — SMS Relay registers all of the above webhooks itself via `POST /webhooks` when you click **Check Device** (or call `register_device_webhooks`). No manual app-side or `config.yml` setup is needed. Registrations are stored per device in `Webhook Registrations`; `reconcile_webhooks` deletes stray entries and re-provisions missing ones.
 
 **Webhook signatures** — the app signs every webhook by default (it auto-generates a random key). To verify, set **Webhook HMAC Secret** in SMS Relay Settings to the app's signing key (App settings → Webhooks → signing key). Both schemes are accepted:
 

@@ -139,14 +139,16 @@ Fetch device info from the SMS Gateway server and auto-fill SMS Device fields.
         "device_model": "Samsung Galaxy S21",
         "carrier_name": "Vodafone",
         "sim_phone_number": "+212600000000",
-        "battery_level": 85
+        "battery_level": 85,
+        "is_active": 1
     }
 }
 ```
 
 Queries:
-- `GET {server_url}/api/mobile/v1/device` — device details (Basic Auth)
+- Device endpoint (first `200` wins, Basic Auth), in order: `GET {api_base}/devices` → `GET {server_url}/devices` → `GET {api_base}/device` → `GET {server_url}/device` → legacy `GET {server_url}/api/mobile/v1/device`
 - `GET {server_url}/health` — online status (no auth)
+- Sets `is_active = 1` on success / `is_active = 0` on failure
 
 **Webhook self-registration:** on success, the gateway webhooks for every supported event are provisioned automatically (see `register_device_webhooks`) and returned under `webhooks`:
 

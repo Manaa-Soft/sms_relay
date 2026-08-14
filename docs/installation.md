@@ -65,6 +65,7 @@ The Docker server has two API namespaces:
 | Endpoint | Purpose | Auth |
 |---|---|---|
 | `POST /api/3rdparty/v1/message` | Frappe sends SMS | **Basic Auth** with device `login:password` |
+| `GET /api/3rdparty/v1/devices` | Device info / status used by **Check Device** | Basic Auth |
 | `POST /api/mobile/v1/device` | Phone registers | **Bearer `private_token`** (private mode) or Basic Auth |
 
 The `private_token` in `config.yml` secures **device registration** — it's a server-side secret, NOT sent by Frappe.
@@ -138,7 +139,7 @@ bench restart
    - Priority: 0 (highest)
    - Active: ✓
 3. Save
-4. Click **Connect Device** to auto-fetch device info
+4. Click **Check Device** to auto-fetch device info
 
 ## Step 5: Create SMS Templates (Optional)
 
@@ -204,7 +205,7 @@ frappe.call({
 - [ ] SMS Gateway Settings configured and enabled
 - [ ] Test Connection successful
 - [ ] At least one SMS Device added and active with correct username/password
-- [ ] Connect Device successful (device info auto-filled)
+- [ ] Check Device successful (device info auto-filled, device Active)
 - [ ] Test SMS sent and received
 - [ ] Webhook configured for delivery receipts (in server config.yml)
 - [ ] (Optional) SMS Templates created

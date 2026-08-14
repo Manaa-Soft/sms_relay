@@ -71,7 +71,7 @@ Each Android phone or HTTP SMS API endpoint is a separate Device record.
 | Field | Type | Required | Description |
 |---|---|---|---|
 | Device Name | Data | Yes | Human-readable label (e.g. "Office Phone"). |
-| Device ID | Data | No | Unique ID from the phone app. Filled by Connect Device. |
+| Device ID | Data | No | Unique ID from the phone app. Filled by Check Device. |
 | Mode | Select | Yes | Local / Cloud / Private. |
 | Server URL | Data | Yes | Gateway server URL for this device (e.g. `http://192.168.1.15:8085`). |
 | Username | Data | No | Gateway auth username (the `login` returned during phone registration). |
@@ -86,7 +86,7 @@ Each Android phone or HTTP SMS API endpoint is a separate Device record.
 
 | Field | Description |
 |---|---|
-| Online | Whether the device is reachable (from Connect Device or health check) |
+| Online | Whether the device is reachable (from Check Device or health check) |
 | Last Heartbeat | Last successful communication time |
 | Device Model | Phone model (auto-detected) |
 | App Version | SMS Gateway app version |
@@ -103,11 +103,13 @@ Each Android phone or HTTP SMS API endpoint is a separate Device record.
 | Sent Today | Int | 0 | Current day count (read-only). |
 | Hourly Quota | Int | 500 | Max SMS per hour. |
 
-### Connect Device Button
+### Check Device Button
 
-Click **Connect Device** in the form to auto-fetch device info from the gateway:
-- Queries `GET {server_url}/api/mobile/v1/device` for device details (with Basic Auth)
+Click **Check Device** in the form to auto-fetch device info from the gateway:
+- Queries the device endpoint for details (with Basic Auth), trying each candidate URL in order and using the first that returns `200`:
+  `{api_base}/devices` → `{server_url}/devices` → `{api_base}/device` → `{server_url}/device` → `{server_url}/api/mobile/v1/device`
 - Queries `GET {server_url}/health` for online status
+- Marks the device **Active** (`is_active = 1`) on success / **Inactive** (`is_active = 0`) on failure — reflected in the page status pill
 - Auto-fills: `device_id`, `device_model`, `carrier_name`, `sim_phone_number`, `app_version`, `battery_level`
 - **Automatically registers all gateway webhooks** for the device (see `register_device_webhooks`), so no manual app-side webhook setup is required.
 
@@ -255,7 +257,7 @@ All resolved phones are sent, deduplicated. Each phone still passes through `cle
 
 ### Automatic Self-Registration (recommended)
 
-SMS Relay provisions webhooks itself against the gateway's 3rd-party API. On **Connect Device** (or by calling `register_device_webhooks` / `reconcile_webhooks`), it registers every supported event:
+SMS Relay provisions webhooks itself against the gateway's 3rd-party API. On **Check Device** (or by calling `register_device_webhooks` / `reconcile_webhooks`), it registers every supported event:
 
 - `POST /webhooks` for each event (`sms:delivered`, `sms:failed`, `sms:sent`, `sms:cancelled`, `sms:received`, `sms:data-received`, `mms:received`, `mms:downloaded`, `app:started`, `system:ping`)
 - Registrations are stored on the SMS Device (`Webhook Registrations`) and kept up to date by `reconcile_webhooks` (stray/mismatched URLs are deleted).

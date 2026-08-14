@@ -66,7 +66,7 @@ sms_relay/sms_relay/
 │   ├── jinja_methods.py        # Custom Jinja filters (money, date, clean phone)
 │   └── contact_manager.py      # Auto-linking inbound SMS to Leads/Contacts/Customers
 ├── doctype/
-│   ├── sms_device/             # Connection, status, quotas, Connect Device button
+│   ├── sms_device/             # Connection, status, quotas, Check Device button
 │   ├── sms_gateway_settings/   # Routing, rate limit, webhook secret, failover, send intervals
 │   ├── sms_log/                # Delivery status, timing, error details, device_id, message_id
 │   ├── sms_queue/              # Priority tiers, target SIM, retry counts, TTL, idempotency
