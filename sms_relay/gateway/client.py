@@ -74,6 +74,43 @@ def to_iso8601(value):
     return dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def resolve_api_base(api_path=None):
+    """Normalize the SMS Gateway API base from the configured ``api_path``."""
+    if api_path is None:
+        settings = frappe.get_single("SMS Gateway Settings")
+        api_path = (settings.get("api_path") or "/api/3rdparty/v1/message").strip()
+    if api_path.endswith("/message"):
+        base = api_path[: -len("/message")].rstrip("/")
+    else:
+        base = api_path.rstrip("/")
+    if not base:
+        base = "/api/3rdparty/v1"
+    if not base.startswith("/"):
+        base = "/" + base
+    return base
+
+
+def candidate_urls(base_url, api_base, *paths):
+    """Candidate absolute URLs for a gateway endpoint, most specific first.
+
+    Tries the configured 3rd-party API base (e.g. ``/api/3rdparty/v1``), the
+    server root (Android local server / private server), then the legacy
+    app-facing ``/api/mobile/v1`` prefix so device checks keep working across
+    server and phone-local deployments.
+    """
+    base = (base_url or "").rstrip("/")
+    if not base:
+        return []
+    urls = []
+    for path in paths:
+        p = "/" + path.lstrip("/")
+        if api_base:
+            urls.append("{}{}{}".format(base, api_base, p))
+        urls.append("{}{}".format(base, p))
+        urls.append("{}/api/mobile/v1{}".format(base, p))
+    return urls
+
+
 class GatewayClient:
     """Client for the SMSGate 3rd-party API of one SMS Device."""
 
@@ -93,16 +130,7 @@ class GatewayClient:
     # Internals
     # ------------------------------------------------------------------ #
     def _resolve_api_base(self):
-        path = (self.settings.get("api_path") or "/api/3rdparty/v1/message").strip()
-        if path.endswith("/message"):
-            base = path[: -len("/message")].rstrip("/")
-        else:
-            base = path.rstrip("/")
-        if not base:
-            base = "/api/3rdparty/v1"
-        if not base.startswith("/"):
-            base = "/" + base
-        return base
+        return resolve_api_base(self.settings.get("api_path"))
 
     def _url(self, path):
         if not self.base_url:
@@ -323,7 +351,7 @@ class GatewayClient:
     def create_webhook(self, event, url, device_id=None):
         body = {"event": event, "url": url}
         if device_id:
-            body["device_id"] = device_id
+            body["deviceId"] = device_id
         resp = self._request("POST", "/webhooks", json=body)
         if resp is None or resp.status_code not in (200, 201, 202):
             return None

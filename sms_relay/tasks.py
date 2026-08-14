@@ -4,6 +4,7 @@ import requests
 from frappe import _
 from frappe.utils import now, cint, add_to_date, getdate
 from sms_relay.core.sms_utils import get_relay_settings
+from sms_relay.gateway.client import candidate_urls, resolve_api_base
 
 def process_sms_queue():
     pending = frappe.get_all(
@@ -176,7 +177,6 @@ def check_device_health():
 def _check_single_device(device):
     if device.gateway_type == "Android SMS Gateway":
         base_url = (device.server_url or "").rstrip("/")
-        url = "{}/api/mobile/v1/device".format(base_url)
         try:
             device_doc = frappe.get_doc("SMS Device", device.name)
             username = device_doc.username or ""
@@ -184,15 +184,32 @@ def _check_single_device(device):
             auth = requests.auth.HTTPBasicAuth(username, password) if username else None
             settings = get_relay_settings()
             timeout = cint(settings.get("timeout")) or 10
-            resp = requests.get(url, auth=auth, timeout=timeout)
-            if resp.status_code == 200:
-                data = resp.json()
-                frappe.db.set_value("SMS Device", device.name, {
-                    "is_active": 1,
-                    "battery_level": data.get("batteryLevel"),
-                    "signal_strength": data.get("signalStrength"),
-                })
-            else:
+            api_base = resolve_api_base(settings.get("api_path"))
+            found = False
+            for url in candidate_urls(base_url, api_base, "/devices", "/device"):
+                try:
+                    resp = requests.get(url, auth=auth, timeout=timeout)
+                except requests.exceptions.RequestException:
+                    continue
+                if resp.status_code == 200:
+                    found = True
+                    data = {}
+                    try:
+                        data = resp.json()
+                    except ValueError:
+                        pass
+                    if isinstance(data, list):
+                        data = data[0] if data else {}
+                    if isinstance(data, dict):
+                        frappe.db.set_value("SMS Device", device.name, {
+                            "is_active": 1,
+                            "battery_level": data.get("batteryLevel"),
+                            "signal_strength": data.get("signalStrength"),
+                        })
+                    else:
+                        frappe.db.set_value("SMS Device", device.name, "is_active", 1)
+                    break
+            if not found:
                 frappe.db.set_value("SMS Device", device.name, "is_active", 0)
         except Exception:
             frappe.db.set_value("SMS Device", device.name, "is_active", 0)

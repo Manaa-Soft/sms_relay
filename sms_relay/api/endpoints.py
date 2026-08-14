@@ -6,6 +6,7 @@ import frappe
 from frappe import _
 from frappe.utils import now, cint
 from sms_relay.core.sms_utils import clean_phone, count_sms_parts, get_relay_settings
+from sms_relay.gateway.client import candidate_urls, resolve_api_base
 
 
 def _get_gateway_auth(settings, device=None):
@@ -23,6 +24,30 @@ def _get_gateway_auth(settings, device=None):
     return headers, auth
 
 
+def _get_first(urls, headers=None, auth=None, timeout=10):
+    """Return the first 2xx GET response across candidate URLs."""
+    for url in urls:
+        try:
+            resp = requests.get(url, headers=headers, auth=auth, timeout=timeout)
+            if resp.status_code == 200:
+                return resp
+        except requests.exceptions.RequestException:
+            continue
+    return None
+
+
+def _put_first(urls, json_body, headers=None, auth=None, timeout=15):
+    """Return the first 2xx PUT response across candidate URLs."""
+    for url in urls:
+        try:
+            resp = requests.put(url, json=json_body, headers=headers, auth=auth, timeout=timeout)
+            if resp.status_code in (200, 204):
+                return resp
+        except requests.exceptions.RequestException:
+            continue
+    return None
+
+
 @frappe.whitelist()
 def test_connection(device_name=None):
     settings = get_relay_settings()
@@ -32,15 +57,22 @@ def test_connection(device_name=None):
     if not gateway_url:
         return {"success": False, "error": "No gateway URL configured"}
     headers, auth = _get_gateway_auth(settings, device)
-    url = "{}/api/mobile/v1/device".format(gateway_url)
+    api_base = resolve_api_base(settings.get("api_path"))
+    resp = _get_first(
+        candidate_urls(gateway_url, api_base, "/devices", "/device"),
+        headers=headers, auth=auth, timeout=timeout,
+    )
+    if resp is not None:
+        data = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
+        return {"success": True, "device": data}
     try:
-        resp = requests.get(url, headers=headers, auth=auth, timeout=timeout)
+        resp = requests.get("{}/health".format(gateway_url), timeout=timeout)
         if resp.status_code == 200:
             data = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
-            return {"success": True, "device": data}
-        return {"success": False, "error": "HTTP {}: {}".format(resp.status_code, resp.text[:200])}
-    except requests.exceptions.RequestException as e:
-        return {"success": False, "error": str(e)[:200]}
+            return {"success": True, "health": data}
+    except requests.exceptions.RequestException:
+        pass
+    return {"success": False, "error": "No reachable gateway endpoint on {}".format(gateway_url)}
 
 
 @frappe.whitelist()
@@ -53,18 +85,19 @@ def connect_device(device_name=None):
         return {"success": False, "error": "No server URL configured"}
     settings = get_relay_settings()
     headers, auth = _get_gateway_auth(settings, device)
+    api_base = resolve_api_base(settings.get("api_path"))
     updates = {"is_online": 0, "last_heartbeat": now(), "is_active": 0}
     result = {"success": False}
 
-    try:
-        resp = requests.get(
-            "{}/api/mobile/v1/device".format(base_url),
-            headers=headers, auth=auth, timeout=15,
-        )
-        if resp.status_code == 200:
-            data = resp.json()
-            if isinstance(data, list) and len(data) > 0:
-                data = data[0]
+    resp = _get_first(
+        candidate_urls(base_url, api_base, "/devices", "/device"),
+        headers=headers, auth=auth, timeout=15,
+    )
+    if resp is not None:
+        data = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
+        if isinstance(data, list) and len(data) > 0:
+            data = data[0]
+        if isinstance(data, dict):
             updates["is_online"] = 1
             updates["last_heartbeat"] = now()
             updates["is_active"] = 1
@@ -82,8 +115,6 @@ def connect_device(device_name=None):
                 if sim.get("simNumber"):
                     updates["sim_number"] = sim["simNumber"]
             result["device"] = data
-    except requests.exceptions.RequestException as e:
-        result["error"] = str(e)[:200]
 
     try:
         resp = requests.get("{}/health".format(base_url), timeout=10)
@@ -359,16 +390,14 @@ def get_device_settings(device_name=None):
         return {"success": False, "error": "No server URL configured"}
     settings = get_relay_settings()
     headers, auth = _get_gateway_auth(settings, device)
-    try:
-        resp = requests.get(
-            "{}/api/mobile/v1/settings".format(base_url),
-            headers=headers, auth=auth, timeout=15,
-        )
-        if resp.status_code == 200:
-            return {"success": True, "settings": resp.json()}
-        return {"success": False, "error": "HTTP {}: {}".format(resp.status_code, resp.text[:200])}
-    except requests.exceptions.RequestException as e:
-        return {"success": False, "error": str(e)[:200]}
+    api_base = resolve_api_base(settings.get("api_path"))
+    resp = _get_first(
+        candidate_urls(base_url, api_base, "/settings"),
+        headers=headers, auth=auth, timeout=15,
+    )
+    if resp is not None:
+        return {"success": True, "settings": resp.json()}
+    return {"success": False, "error": "No reachable settings endpoint on {}".format(base_url)}
 
 
 @frappe.whitelist()
@@ -389,17 +418,15 @@ def update_device_settings(device_name=None, settings_json=None):
             settings_json = json.loads(settings_json)
         except (ValueError, TypeError):
             return {"success": False, "error": "Invalid JSON"}
-    try:
-        resp = requests.put(
-            "{}/api/mobile/v1/settings".format(base_url),
-            json=settings_json,
-            headers=headers, auth=auth, timeout=15,
-        )
-        if resp.status_code in (200, 204):
-            return {"success": True}
-        return {"success": False, "error": "HTTP {}: {}".format(resp.status_code, resp.text[:200])}
-    except requests.exceptions.RequestException as e:
-        return {"success": False, "error": str(e)[:200]}
+    api_base = resolve_api_base(settings.get("api_path"))
+    resp = _put_first(
+        candidate_urls(base_url, api_base, "/settings"),
+        settings_json,
+        headers=headers, auth=auth, timeout=15,
+    )
+    if resp is not None:
+        return {"success": True}
+    return {"success": False, "error": "No reachable settings endpoint on {}".format(base_url)}
 
 
 @frappe.whitelist()
