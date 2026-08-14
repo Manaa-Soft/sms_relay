@@ -54,14 +54,19 @@ def _save_registrations(device, registrations):
 def provision_webhooks(device, events=None):
     """Register every gateway event on the device (idempotent).
 
-    Returns ``{"status": "ok", "webhooks": [{event, id, url}]}``.
+    Returns ``{"status": "ok", "webhooks": [{event, id, url}],
+    "errors": [str]}`` where ``errors`` holds per-event provisioning failures
+    (e.g. the gateway rejecting an ``http://`` webhook URL).
     """
     client = GatewayClient(device)
     url = get_webhook_url(device)
     device_id = device.device_id or None
     events = list(events) if events else list(GATEWAY_WEBHOOK_EVENTS)
 
+    errors = []
     existing = client.list_webhooks()
+    if client.last_error:
+        errors.append(client.last_error)
     existing_map = {}
     for item in existing:
         if not isinstance(item, dict):
@@ -77,11 +82,16 @@ def provision_webhooks(device, events=None):
             data = client.create_webhook(event, url, device_id=device_id)
             if data and data.get("id"):
                 webhook_id = data["id"]
+            elif client.last_error:
+                errors.append(client.last_error)
         if webhook_id:
             registrations.append({"event": event, "id": webhook_id, "url": url})
 
     _save_registrations(device, registrations)
-    return {"status": "ok", "webhooks": registrations}
+    result = {"status": "ok", "webhooks": registrations}
+    if errors:
+        result["errors"] = list(dict.fromkeys(errors))
+    return result
 
 
 def reconcile_webhooks(device):
@@ -91,13 +101,20 @@ def reconcile_webhooks(device):
     url = get_webhook_url(device)
     wanted = set(GATEWAY_WEBHOOK_EVENTS)
 
+    errors = []
     existing = client.list_webhooks()
+    if client.last_error:
+        errors.append(client.last_error)
     for item in existing:
         if not isinstance(item, dict):
             continue
         if item.get("event") in wanted and (item.get("url") or "").rstrip("/") == url:
             continue
         if item.get("id"):
-            client.delete_webhook(item["id"])
+            if not client.delete_webhook(item["id"]) and client.last_error:
+                errors.append(client.last_error)
 
-    return provision_webhooks(device, events=list(wanted))
+    result = provision_webhooks(device, events=list(wanted))
+    if errors:
+        result["errors"] = list(dict.fromkeys((result.get("errors") or []) + errors))
+    return result

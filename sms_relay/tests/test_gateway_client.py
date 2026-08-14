@@ -148,6 +148,32 @@ class TestWebhookProvisioning(SMSRelayTestCase):
             delete_url = mock_delete.call_args.args[0]
             self.assertTrue(delete_url.endswith("/webhooks/wh-stray"))
 
+    def test_provision_reports_errors(self):
+        with patch("sms_relay.gateway.client.requests.get") as mock_get, \
+             patch("sms_relay.gateway.client.requests.post") as mock_post:
+            mock_get.return_value = _json_response(200, [])
+            mock_post.return_value = _json_response(
+                400,
+                {"error": "validation failed"},
+                text="failed to validate: validation failed: url must start with https://",
+            )
+
+            result = provision_webhooks(self._device())
+            self.assertEqual(result["webhooks"], [])
+            self.assertIn("errors", result)
+            self.assertTrue(any("400" in err for err in result["errors"]))
+            self.assertIn("https://", result["errors"][0])
+
+    def test_provision_ok_has_no_errors_key(self):
+        with patch("sms_relay.gateway.client.requests.get") as mock_get, \
+             patch("sms_relay.gateway.client.requests.post") as mock_post:
+            mock_get.return_value = _json_response(200, [])
+            mock_post.return_value = _json_response(201, {"id": "wh-1"})
+
+            result = provision_webhooks(self._device())
+            self.assertEqual(len(result["webhooks"]), len(GATEWAY_WEBHOOK_EVENTS))
+            self.assertNotIn("errors", result)
+
 
 class TestInboxSync(SMSRelayTestCase):
     def _inbox_payload(self, messages):

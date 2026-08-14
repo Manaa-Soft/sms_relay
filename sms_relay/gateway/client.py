@@ -125,6 +125,7 @@ class GatewayClient:
         self.password = device.get_password("password") or ""
         self.timeout = cint(self.settings.get("timeout")) or 15
         self.api_base = self._resolve_api_base()
+        self.last_error = None
 
     # ------------------------------------------------------------------ #
     # Internals
@@ -252,8 +253,15 @@ class GatewayClient:
                     resp = request_fn(url, headers=headers, **kwargs)
                 else:
                     resp = request_fn(url, auth=self._basic_auth(), headers=headers, **kwargs)
+            if 200 <= resp.status_code < 300:
+                self.last_error = None
+            else:
+                self.last_error = "{} {} -> HTTP {}: {}".format(
+                    method.upper(), url, resp.status_code, (resp.text or "")[:200]
+                )
             return resp
-        except requests.exceptions.RequestException:
+        except requests.exceptions.RequestException as exc:
+            self.last_error = "{} {} -> connection error: {}".format(method.upper(), url, exc)
             return None
 
     def _parse_json(self, resp):

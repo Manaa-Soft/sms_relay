@@ -219,6 +219,16 @@ class TestTestConnection(SMSRelayTestCase):
         result = test_connection(device_name="Test Phone")
         self.assertFalse(result["success"])
 
+    @patch("sms_relay.api.endpoints.requests.get")
+    def test_connection_reports_probe(self, mock_get):
+        import requests
+        mock_get.side_effect = requests.exceptions.ConnectionError("timeout")
+        result = test_connection(device_name="Test Phone")
+        self.assertFalse(result["success"])
+        self.assertIn("probe", result)
+        self.assertGreater(len(result["probe"]), 0)
+        self.assertIn("error", result["probe"][0])
+
 
 class TestConnectDevice(SMSRelayTestCase):
     """Test connect_device endpoint."""
@@ -241,3 +251,36 @@ class TestConnectDevice(SMSRelayTestCase):
     def test_no_device_name_throws(self):
         with self.assertRaises(frappe.ValidationError):
             connect_device()
+
+    @patch("sms_relay.api.endpoints.requests.get")
+    def test_connect_device_reports_probe_on_no_endpoint(self, mock_get):
+        import requests
+        mock_get.side_effect = requests.exceptions.ConnectionError("no route to host")
+        result = connect_device(device_name="Test Phone")
+        self.assertFalse(result["success"])
+        self.assertIn("probe", result)
+        self.assertGreater(len(result["probe"]), 0)
+
+    @patch("sms_relay.api.endpoints.requests.post")
+    @patch("sms_relay.api.endpoints.requests.get")
+    def test_connect_device_surfaces_webhook_error(self, mock_get, mock_post):
+        def get_side(url, **kwargs):
+            mock_resp = MagicMock()
+            mock_resp.status_code = 200
+            mock_resp.headers = {"content-type": "application/json"}
+            if "health" in url:
+                mock_resp.json.return_value = {"version": "1.67.0"}
+            else:
+                mock_resp.json.return_value = {"id": "dev-001", "name": "Galaxy"}
+            return mock_resp
+
+        mock_get.side_effect = get_side
+        mock_post.return_value = MagicMock(
+            status_code=400,
+            headers={"content-type": "application/json"},
+            text="failed to validate: validation failed: url must start with https://",
+        )
+        result = connect_device(device_name="Test Phone")
+        self.assertTrue(result["success"])
+        self.assertIn("webhook_error", result)
+        self.assertIn("400", result["webhook_error"])

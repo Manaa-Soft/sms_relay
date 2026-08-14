@@ -24,14 +24,23 @@ def _get_gateway_auth(settings, device=None):
     return headers, auth
 
 
-def _get_first(urls, headers=None, auth=None, timeout=10):
-    """Return the first 2xx GET response across candidate URLs."""
+def _get_first(urls, headers=None, auth=None, timeout=10, report=None):
+    """Return the first 2xx GET response across candidate URLs.
+
+    ``report`` (optional list) is appended with ``{"url": ..., "status": N}``
+    or ``{"url": ..., "error": "..."}`` for each candidate so callers can
+    surface why no endpoint matched.
+    """
     for url in urls:
         try:
             resp = requests.get(url, headers=headers, auth=auth, timeout=timeout)
+            if report is not None:
+                report.append({"url": url, "status": resp.status_code})
             if resp.status_code == 200:
                 return resp
-        except requests.exceptions.RequestException:
+        except requests.exceptions.RequestException as exc:
+            if report is not None:
+                report.append({"url": url, "error": str(exc)[:200]})
             continue
     return None
 
@@ -58,9 +67,10 @@ def test_connection(device_name=None):
         return {"success": False, "error": "No gateway URL configured"}
     headers, auth = _get_gateway_auth(settings, device)
     api_base = resolve_api_base(settings.get("api_path"))
+    probe = []
     resp = _get_first(
         candidate_urls(gateway_url, api_base, "/devices", "/device"),
-        headers=headers, auth=auth, timeout=timeout,
+        headers=headers, auth=auth, timeout=timeout, report=probe,
     )
     if resp is not None:
         data = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
@@ -72,7 +82,11 @@ def test_connection(device_name=None):
             return {"success": True, "health": data}
     except requests.exceptions.RequestException:
         pass
-    return {"success": False, "error": "No reachable gateway endpoint on {}".format(gateway_url)}
+    return {
+        "success": False,
+        "error": "No reachable gateway endpoint on {}".format(gateway_url),
+        "probe": probe,
+    }
 
 
 @frappe.whitelist()
@@ -89,9 +103,10 @@ def connect_device(device_name=None):
     updates = {"is_online": 0, "last_heartbeat": now(), "is_active": 0}
     result = {"success": False}
 
+    probe = []
     resp = _get_first(
         candidate_urls(base_url, api_base, "/devices", "/device"),
-        headers=headers, auth=auth, timeout=15,
+        headers=headers, auth=auth, timeout=15, report=probe,
     )
     if resp is not None:
         data = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
@@ -115,6 +130,8 @@ def connect_device(device_name=None):
                 if sim.get("simNumber"):
                     updates["sim_number"] = sim["simNumber"]
             result["device"] = data
+    else:
+        result["probe"] = probe
 
     try:
         resp = requests.get("{}/health".format(base_url), timeout=10)
@@ -141,9 +158,14 @@ def connect_device(device_name=None):
     # Self-register webhooks so no manual app-side setup is required.
     try:
         from sms_relay.gateway.webhooks import provision_webhooks
-        result["webhooks"] = provision_webhooks(device).get("webhooks", [])
-    except Exception:
+        webhook_result = provision_webhooks(device)
+        result["webhooks"] = webhook_result.get("webhooks", [])
+        webhook_errors = webhook_result.get("errors") or []
+        if webhook_errors:
+            result["webhook_error"] = "; ".join(webhook_errors[:3])
+    except Exception as exc:
         result["webhooks"] = []
+        result["webhook_error"] = str(exc)[:300]
     return result
 
 
