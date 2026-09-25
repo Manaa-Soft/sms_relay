@@ -128,9 +128,9 @@ curl -X POST https://YOUR-FRAPPE-SITE/api/method/sms_relay.api.webhook_receiver.
   -H "Content-Type: application/json" \
   -d '{"event": "system:ping", "deviceId": "test"}'
 ```
-4. Check Webhook HMAC Secret matches between Frappe and the app's signing key
-5. Check the gateway container trusts your TLS cert (private CA: set `SSL_CERT_FILE` in the gateway container)
-6. Check firewall allows incoming connections
+4. Check Webhook HMAC Secret matches the app's Webhooks signing key
+5. The **app** POSTs the webhooks itself, so the phone must be able to reach the https URL and trust its certificate (private CA: install it as a **user CA on the phone**). The phone also refreshes its webhook list every 24 h / when the Cloud Server connection starts / on an FCM push — toggle that connection in the app so newly registered hooks are fetched.
+6. Check firewall allows incoming connections to Frappe on 443
 
 ---
 
@@ -221,16 +221,18 @@ curl -X POST https://YOUR-FRAPPE-SITE/api/method/sms_relay.api.webhook_receiver.
 
 **Causes:**
 1. Registered webhook URL is `http://` — the gateway server hard-rejects it (`400 url must start with https://`; no `allow_http` option)
-2. Frappe site unreachable from the gateway server / TLS cert not trusted
-3. Wrong URL (auto-detected instead of your LAN https endpoint)
-4. HMAC secret mismatch
+2. The phone has not fetched the new registrations yet (it syncs every 24 h / on Cloud Server connect / on FCM push)
+3. The phone cannot reach the URL, or does not trust its certificate
+4. Wrong URL (auto-detected instead of your LAN https endpoint)
+5. HMAC secret mismatch
 
 **Fix:**
 1. Check `SMS Webhook Delivery` list for failed entries
 2. Set the webhook URL to `https://YOUR-FRAPPE-SITE/api/method/sms_relay.api.webhook_receiver.incoming_webhook` on **SMS Device → Webhook Callback URL** (or **SMS Gateway Settings → Webhook URL**), then re-run **Check Device**
-3. Test: `curl -X POST https://YOUR-FRAPPE-SITE/api/method/sms_relay.api.webhook_receiver.incoming_webhook -H "Content-Type: application/json" -d '{"event": "system:ping"}'`
-4. Private CA: make the gateway container trust it via `SSL_CERT_FILE` (see the wiki [Webhook Delivery](https://github.com/Manaa-Soft/sms_relay/wiki/Webhook-Delivery))
-5. Check firewall allows incoming connections
+3. Toggle the Cloud Server connection in the app so it pulls the new webhook list (offline there is no FCM push to trigger it)
+4. Test: `curl -X POST https://YOUR-FRAPPE-SITE/api/method/sms_relay.api.webhook_receiver.incoming_webhook -H "Content-Type: application/json" -d '{"event": "system:ping"}'`
+5. Private CA: install it as a **user CA on the phone** — the app trusts user-installed CAs (see the wiki [Webhook Delivery](https://github.com/Manaa-Soft/sms_relay/wiki/Webhook-Delivery))
+6. Check firewall allows incoming connections to Frappe on 443
 
 ---
 

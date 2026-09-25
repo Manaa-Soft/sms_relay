@@ -268,8 +268,9 @@ This replaces the legacy manual setup. **There is no `webhooks:` section in the 
 
 - The registered URL **must start with `https://`**. The gateway server rejects anything else with `400 Bad Request: url must start with https://`.
 - To control the URL on a private LAN, set **SMS Device → Webhook Callback URL** (per device) or **SMS Gateway Settings → Webhook URL** (global), e.g. `https://192.168.1.15/api/method/sms_relay.api.webhook_receiver.incoming_webhook`.
-- Fully offline operation (no internet) is possible: all three legs run on the LAN (Frappe registers webhooks → phone reports events to the server → the server relays to the https URL). Terminate TLS with nginx in front of Frappe and point the gateway container at your CA via `SSL_CERT_FILE`. See the [wiki: Webhook Delivery](https://github.com/Manaa-Soft/sms_relay/wiki/Webhook-Delivery).
-- Incoming SMS only arrives via webhook — the server's `GET /api/3rdparty/v1/inbox` returns `501 Not Implemented`, so there is no polling fallback.
+- The **Android app** POSTs the webhooks itself to that URL (it fetches its webhook list from the server; the server does not relay), so the **phone** must be able to reach the URL and trust its certificate. Fully offline operation is fine: the phone is on the LAN. Terminate TLS with nginx in front of Frappe and install your self-signed CA as a **user CA on the phone** — the app's network security config trusts user-installed CAs. See the [wiki: Webhook Delivery](https://github.com/Manaa-Soft/sms_relay/wiki/Webhook-Delivery).
+- The phone refreshes its webhook list from the server every 24 hours, when the Cloud Server connection starts, or on an FCM push (needs internet). After registering webhooks, toggle the app's Cloud Server connection so the new entries are fetched, then confirm they appear in the app's Webhooks screen (server-registered entries are read-only there).
+- Incoming SMS only reaches SMS Relay via webhook — the server's `GET /api/3rdparty/v1/inbox` returns `501 Not Implemented`, so there is no polling fallback. (The app does upload inbound messages to the server over `POST /api/mobile/v1/inbox`, but SMS Relay cannot read them back.)
 
 ### HMAC Signature Verification
 

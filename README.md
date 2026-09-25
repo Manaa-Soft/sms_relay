@@ -291,7 +291,7 @@ frappe.call({
 
 ### Webhook
 
-In **Private/Cloud** mode the gateway **server relays** webhook events to the URL that SMS Relay registered (the phone reports events to the server over the mobile API — it does not post to your site directly), with this envelope:
+In **Private/Cloud** mode the **Android app POSTs webhook events itself**, straight to the URL SMS Relay registered (the app fetches its webhook list from the server — the server does not relay), with this envelope:
 
 ```
 POST https://your-frappe-site/api/method/sms_relay.api.webhook_receiver.incoming_webhook
@@ -315,7 +315,7 @@ Supported events: `sms:delivered`, `sms:failed`, `sms:sent`, `sms:cancelled`, `s
 
 **Automatic registration** — SMS Relay registers all of the above webhooks itself via `POST /webhooks` when you click **Check Device** (or call `register_device_webhooks`). No manual app-side or `config.yml` setup is needed. Registrations are stored per device in `Webhook Registrations`; `reconcile_webhooks` deletes stray entries and re-provisions missing ones.
 
-> **The webhook URL must start with `https://`** — the gateway server rejects anything else with `400 url must start with https://` (there is no `allow_http` option). On a private LAN this still works fully offline: terminate TLS with nginx in front of Frappe and point the gateway container at your CA via `SSL_CERT_FILE`. See the [wiki: Webhook Delivery](https://github.com/Manaa-Soft/sms_relay/wiki/Webhook-Delivery).
+> **The webhook URL must start with `https://`** — the gateway server rejects anything else with `400 url must start with https://` (there is no `allow_http` option). Since the app delivers the webhooks itself, the **phone** must be able to reach that URL and trust its certificate: on a private LAN terminate TLS with nginx in front of Frappe and install your self-signed CA as a **user CA on the phone** (the app's network security config trusts user CAs). No internet connection is required. The phone also refreshes its webhook list from the server every 24 h / when the Cloud Server connection starts / on an FCM push — so re-run **Check Device**, then toggle the app's Cloud Server connection to pick the new hooks up. See the [wiki: Webhook Delivery](https://github.com/Manaa-Soft/sms_relay/wiki/Webhook-Delivery).
 
 **Webhook signatures** — the app signs every webhook by default (it auto-generates a random key). To verify, set **Webhook HMAC Secret** in SMS Relay Settings to the app's signing key (App settings → Webhooks → signing key). Both schemes are accepted:
 

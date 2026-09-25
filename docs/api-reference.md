@@ -610,7 +610,7 @@ Public endpoint for receiving delivery receipts and incoming SMS.
 
 ### Request Envelope
 
-In **Private/Cloud** mode the gateway **server relays** the event to the registered webhook URL (the phone reports events to the server over the mobile API; it does not post here directly). The webhook URL **must start with `https://`** — the gateway rejects `http://` with `400 url must start with https://`. The relayed envelope looks like:
+The Android SMS Gateway **app POSTs the event itself** to the URL that was registered via `POST /webhooks` (the app fetches its webhook list from the server; the server does not relay). The URL **must start with `https://`** — the gateway rejects `http://` with `400 url must start with https://` — and the phone must be able to reach it and trust its certificate. The posted envelope looks like:
 
 ```json
 {
