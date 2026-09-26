@@ -73,6 +73,22 @@ class TestGatewayClientJWT(SMSRelayTestCase):
             auth = mock_post.call_args.kwargs.get("auth")
             self.assertIsNotNone(auth)
 
+    def test_send_message_treats_409_as_success(self):
+        with patch("sms_relay.gateway.client.requests.post") as mock_post:
+            mock_post.return_value = _json_response(409, {"id": "dup-1"})
+            client = GatewayClient(frappe.get_doc("SMS Device", "Test Phone"))
+            result = client.send_message(["+15551234567"], text="Dup")
+            self.assertTrue(result["success"])
+            self.assertEqual(result["message_id"], "dup-1")
+
+    def test_send_message_409_without_id_uses_requested_id(self):
+        with patch("sms_relay.gateway.client.requests.post") as mock_post:
+            mock_post.return_value = _json_response(409, {"message": "Duplicate message ID"})
+            client = GatewayClient(frappe.get_doc("SMS Device", "Test Phone"))
+            result = client.send_message(["+15551234567"], text="Dup", message_id="req-1")
+            self.assertTrue(result["success"])
+            self.assertEqual(result["message_id"], "req-1")
+
     def test_send_message_payload(self):
         with patch("sms_relay.gateway.client.requests.post") as mock_post:
             mock_post.return_value = _json_response(202, {"id": "m-9"})

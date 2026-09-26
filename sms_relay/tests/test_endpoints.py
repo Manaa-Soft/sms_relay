@@ -15,7 +15,18 @@ from sms_relay.api.endpoints import (
     preview_template,
     retry_sms,
     get_notification_preview,
+    get_device_settings,
+    update_device_settings,
 )
+
+
+def _response(status_code, payload=None, text=None):
+    resp = MagicMock()
+    resp.status_code = status_code
+    resp.headers = {"content-type": "application/json"}
+    resp.json.return_value = payload if payload is not None else {}
+    resp.text = text if text is not None else json.dumps(payload or {})
+    return resp
 
 
 class TestSendSmsNow(SMSRelayTestCase):
@@ -284,3 +295,22 @@ class TestConnectDevice(SMSRelayTestCase):
         self.assertTrue(result["success"])
         self.assertIn("webhook_error", result)
         self.assertIn("400", result["webhook_error"])
+
+
+class TestDeviceSettings(SMSRelayTestCase):
+    def test_get_device_settings_success(self):
+        with patch("sms_relay.api.endpoints.requests.get") as mock_get:
+            mock_get.return_value = _response(200, {"url": "http://test"})
+            result = get_device_settings(device_name="Test Phone")
+            self.assertTrue(result["success"])
+            self.assertEqual(result["settings"]["url"], "http://test")
+
+    def test_update_device_settings_put_then_patch_fallback(self):
+        with patch("sms_relay.api.endpoints.requests.put") as mock_put, \
+             patch("sms_relay.api.endpoints.requests.patch") as mock_patch:
+            mock_put.return_value = _response(405, {"error": "method not allowed"})
+            mock_patch.return_value = _response(200, {})
+            result = update_device_settings(device_name="Test Phone", settings_json={"keepalivePeriod": 300})
+            self.assertTrue(result["success"])
+            self.assertTrue(mock_put.called)
+            self.assertTrue(mock_patch.called)

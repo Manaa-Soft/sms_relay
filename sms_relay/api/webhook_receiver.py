@@ -114,9 +114,10 @@ def _handle_delivery_report(data, event_type):
                 if reason:
                     fields["error_message"] = reason
             if event_type == "sms:sent":
-                parts = data.get("partsCount")
-                if parts is not None:
-                    fields["sms_parts"] = cint(parts)
+                # The app reports -1 when the multipart segment count is unknown.
+                parts = cint(data.get("partsCount"))
+                if parts > 0:
+                    fields["sms_parts"] = parts
             frappe.db.set_value("SMS Log", log_name, fields)
         frappe.db.commit()
 

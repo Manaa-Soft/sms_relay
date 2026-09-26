@@ -215,6 +215,22 @@ class TestDeliveryReportFidelity(SMSRelayTestCase):
         self.assertEqual(log.delivery_status, "Sent")
         self.assertEqual(log.sms_parts, 2)
 
+    def test_sent_parts_ignored_when_unknown(self):
+        frappe.get_doc({
+            "doctype": "SMS Log",
+            "phone": "+15551234567",
+            "message": "Test",
+            "status": "Queued",
+            "gateway_message_id": "gw-sent-unknown",
+            "delivery_status": "Pending",
+        }).insert(ignore_permissions=True)
+        frappe.db.commit()
+
+        _handle_delivery_report({"id": "gw-sent-unknown", "partsCount": -1}, "sms:sent")
+        log_name = frappe.db.get_value("SMS Log", {"gateway_message_id": "gw-sent-unknown"}, "name")
+        log = frappe.get_doc("SMS Log", log_name)
+        self.assertIsNone(log.sms_parts)
+
 
 class TestWebhookDeliveryQueue(SMSRelayTestCase):
     """Test webhook delivery queue creation."""

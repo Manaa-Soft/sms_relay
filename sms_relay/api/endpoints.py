@@ -45,15 +45,22 @@ def _get_first(urls, headers=None, auth=None, timeout=10, report=None):
     return None
 
 
-def _put_first(urls, json_body, headers=None, auth=None, timeout=15):
-    """Return the first 2xx PUT response across candidate URLs."""
-    for url in urls:
-        try:
-            resp = requests.put(url, json=json_body, headers=headers, auth=auth, timeout=timeout)
-            if resp.status_code in (200, 204):
-                return resp
-        except requests.exceptions.RequestException:
-            continue
+def _write_first(urls, json_body, methods=("put",), headers=None, auth=None, timeout=15):
+    """Return the first 2xx write response across candidate URLs.
+
+    ``methods`` are tried in order for every URL. The Docker server accepts
+    ``PUT /settings`` while the Android local server only implements ``PATCH``,
+    so settings updates pass both verbs.
+    """
+    for method in methods:
+        request_fn = getattr(requests, method)
+        for url in urls:
+            try:
+                resp = request_fn(url, json=json_body, headers=headers, auth=auth, timeout=timeout)
+                if resp.status_code in (200, 204):
+                    return resp
+            except requests.exceptions.RequestException:
+                continue
     return None
 
 
@@ -441,9 +448,10 @@ def update_device_settings(device_name=None, settings_json=None):
         except (ValueError, TypeError):
             return {"success": False, "error": "Invalid JSON"}
     api_base = resolve_api_base(settings.get("api_path"))
-    resp = _put_first(
+    resp = _write_first(
         candidate_urls(base_url, api_base, "/settings"),
         settings_json,
+        methods=("put", "patch"),
         headers=headers, auth=auth, timeout=15,
     )
     if resp is not None:

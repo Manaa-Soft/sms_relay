@@ -326,11 +326,12 @@ class GatewayClient:
         resp = self._request("POST", "/message", json=payload)
         if resp is None:
             return {"success": False, "error": "Connection error"}
-        if resp.status_code in (200, 201, 202):
-            data2 = self._parse_json(resp)
+        if resp.status_code in (200, 201, 202, 409):
+            # 409 means the id was already accepted, so the message is queued.
+            body = self._parse_json(resp)
             return {
                 "success": True,
-                "message_id": data2.get("id") or data2.get("messageId") or data2.get("requestId"),
+                "message_id": body.get("id") or body.get("messageId") or body.get("requestId") or message_id,
             }
         return {"success": False, "error": "HTTP {}: {}".format(resp.status_code, (resp.text or "")[:200])}
 
